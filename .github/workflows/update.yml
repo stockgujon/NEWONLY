@@ -1,0 +1,39 @@
+name: 更新財經儀表板
+
+on:
+  schedule:
+    # 以下時間為 UTC，已換算對應台灣時間（UTC+8）
+    - cron: "30 23 * * *"   # 台灣時間 07:30
+    - cron: "30 4 * * *"    # 台灣時間 12:30
+    - cron: "30 6 * * *"    # 台灣時間 14:30
+    - cron: "0 13 * * *"    # 台灣時間 21:00
+  workflow_dispatch: {}      # 允許手動點擊執行，方便測試
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+
+      - name: 設定 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安裝套件
+        run: pip install -r requirements.txt
+
+      - name: 執行抓取與網頁產生程式
+        run: python update_site.py
+
+      - name: 提交更新結果
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html data/news.db
+          git diff --quiet && git diff --staged --quiet || git commit -m "自動更新：$(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
