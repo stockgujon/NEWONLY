@@ -459,7 +459,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </svg>
       台灣財經儀表板
     </h1>
-    <p>總經 · 台股與國際股市 · 國內ETF　最後產生時間：{build_time}</p>
+    <p>總經 · 台股與國際股市 · 國內ETF　最後產生時間：{build_time}（台灣時間）</p>
   </header>
 
   {macro_section}
@@ -503,7 +503,8 @@ def build_html(conn):
     intl_stock_list = render_article_list(get_recent_articles(conn, "intl_stock"))
     etf_list = render_article_list(get_recent_articles(conn, "etf"))
 
-    build_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    taiwan_tz = datetime.timezone(datetime.timedelta(hours=8))
+    build_time = datetime.datetime.now(taiwan_tz).strftime("%Y-%m-%d %H:%M")
 
     html = HTML_TEMPLATE.format(
         build_time=build_time,
