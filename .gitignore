@@ -1,0 +1,14 @@
+# Python 暫存檔案
+__pycache__/
+*.pyc
+
+# 環境變數檔（如果你之後在本機測試時建立 .env 檔，絕對不要上傳）
+.env
+.env.local
+
+# 編輯器設定
+.vscode/
+.idea/
+
+# 系統檔案
+.DS_Store
