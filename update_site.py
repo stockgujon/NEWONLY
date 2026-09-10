@@ -30,11 +30,16 @@ OUTPUT_HTML = os.path.join(os.path.dirname(__file__), "index.html")
 CNA_FINANCE_RSS = "https://feeds.feedburner.com/rsscna/finance"
 # 國際/總經 共用來源：經濟日報「國際」
 UDN_INTL_RSS = "https://money.udn.com/rssfeed/news/1001/5588?ch=money"
-# ETF 專用來源：經濟日報「基金天地」
-# 注意：這個網址是根據網站分類結構推導出來的，第一次執行時請務必確認
-# 抓到的內容是否為 ETF 相關；如果抓不到資料或內容不對，
-# 請到 https://money.udn.com/money/cate/5618 確認正確的 RSS 路徑。
-UDN_ETF_RSS = "https://money.udn.com/rssfeed/news/1001/5618?ch=money"
+# ETF 來源：經濟日報「理財」分類（此網址格式與已驗證可用的「國際」分類相同結構，
+# 較為可靠），實際ETF內容透過下方 ETF_KEYWORDS 關鍵字篩選取得
+UDN_LICAI_RSS = "https://money.udn.com/rssfeed/news/1001/5592?ch=money"
+
+# ETF 相關關鍵字，用來從「理財」分類中篩選出真正的ETF新聞
+ETF_KEYWORDS = [
+    "ETF", "0050", "0056", "0052", "00878", "00919", "00713", "00929",
+    "00981", "00982", "00985", "006208", "00631L", "高股息", "市值型",
+    "主動式ETF", "定期定額", "受益人數", "投信", "基金",
+]
 
 # 「牽動台股的國際大事」關鍵字清單 —— 用來從國際新聞中篩選
 INTL_KEYWORDS = [
@@ -195,15 +200,17 @@ def fetch_all_sources(conn):
             if contains_any(title + desc, MACRO_KEYWORDS):
                 save_article(conn, title, link, "經濟日報", "macro", pub_date, desc)
 
-    # 3. 經濟日報「基金天地」→ 用於「ETF」列表，直接全部收錄
-    feed = fetch_rss_with_retry(UDN_ETF_RSS)
+    # 3. 經濟日報「理財」→ 用ETF關鍵字篩選出「ETF」列表
+    feed = fetch_rss_with_retry(UDN_LICAI_RSS)
     if feed:
         for entry in feed.entries:
             title = entry.get("title", "")
             link = entry.get("link", "")
             desc = re.sub("<[^<]+?>", "", entry.get("description", ""))
             pub_date = entry.get("published", "")
-            save_article(conn, title, link, "經濟日報", "etf", pub_date, desc)
+
+            if contains_any(title + desc, ETF_KEYWORDS):
+                save_article(conn, title, link, "經濟日報", "etf", pub_date, desc)
 
     conn.commit()
 
@@ -404,10 +411,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     font-size: 12px;
   }}
   .site-footer p {{
-    margin: 4px 0;
+    margin-top: 4px;
+    margin-bottom: 4px;
   }}
   .media-note {{
-    max-width: 480px;
+    max-width: 420px;
     margin-left: auto;
     margin-right: auto;
     margin-bottom: 12px !important;
