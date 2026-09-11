@@ -326,9 +326,10 @@ def is_plausible_index_value(index_code, value):
 
 def fetch_tpex_month(year_month):
     """抓櫃買指數，year_month 格式 YYYYMM，回傳 [(date, close), ...]
-    注意：官方回傳的欄位順序未完全確認，因此對每一列嘗試多個可能的欄位位置，
-    取第一個「數值落在合理範圍內」的當作收盤指數，並排除掉不合理的極端值
-    （例如誤把成交金額當成指數），降低欄位判讀錯誤的風險。"""
+    注意：官方回傳的確切欄位順序未完全確認。做法是先看過這整個月所有天數，
+    統計「哪一個欄位」有最多天的數值落在合理範圍內，選出那一欄後，
+    全部列統一套用同一欄位——避免「每天各自判斷」導致不同天選到不同欄位、
+    造成走勢圖出現不合理斷崖的問題。"""
     year = int(year_month[:4])
     month = int(year_month[4:6])
     roc_date = f"{year - 1911}/{month:02d}"
@@ -337,7 +338,12 @@ def fetch_tpex_month(year_month):
     if not feed_data:
         return []
     rows = feed_data.get("aaData") or feed_data.get("tables", [{}])[0].get("data", [])
-    results = []
+    if not rows:
+        return []
+
+    # 第一輪：解析每一列的日期，並記錄每個候選欄位在這一列的數值
+    parsed_rows = []  # [(date_str, {col_idx: value, ...}), ...]
+    max_cols = 9
     for row in rows:
         try:
             roc_date_str = row[0].replace(",", "")
@@ -346,20 +352,42 @@ def fetch_tpex_month(year_month):
         except (ValueError, IndexError, AttributeError):
             continue
 
-        close_value = None
-        for col_idx in range(1, min(len(row), 9)):
+        col_values = {}
+        for col_idx in range(1, min(len(row), max_cols)):
             try:
-                candidate = float(str(row[col_idx]).replace(",", ""))
+                col_values[col_idx] = float(str(row[col_idx]).replace(",", ""))
             except (ValueError, TypeError):
                 continue
-            if is_plausible_index_value("TPEX", candidate):
-                close_value = candidate
-                break
+        parsed_rows.append((date_str, col_values))
 
-        if close_value is not None:
-            results.append((date_str, close_value))
-        else:
-            print(f"[警告] 櫃買指數 {date_str} 找不到合理範圍內的欄位，該筆跳過")
+    if not parsed_rows:
+        return []
+
+    # 第二輪：統計每個欄位有多少列的數值落在合理範圍內，選出最多的那一欄
+    plausible_counts = {}
+    for _date_str, col_values in parsed_rows:
+        for col_idx, value in col_values.items():
+            if is_plausible_index_value("TPEX", value):
+                plausible_counts[col_idx] = plausible_counts.get(col_idx, 0) + 1
+
+    if not plausible_counts:
+        print("[警告] 櫃買指數整月資料找不到任何合理欄位，本次跳過")
+        return []
+
+    best_col = max(plausible_counts, key=plausible_counts.get)
+    coverage = plausible_counts[best_col] / len(parsed_rows)
+    if coverage < 0.7:
+        print(f"[警告] 櫃買指數最佳欄位覆蓋率僅 {coverage:.0%}，資料品質存疑，本次跳過")
+        return []
+
+    print(f"[資訊] 櫃買指數判定收盤指數位於第 {best_col} 欄（覆蓋率 {coverage:.0%}）")
+
+    # 第三輪：統一用選定的欄位取值，該欄位不合理的個別列則跳過
+    results = []
+    for date_str, col_values in parsed_rows:
+        value = col_values.get(best_col)
+        if value is not None and is_plausible_index_value("TPEX", value):
+            results.append((date_str, value))
     return results
 
 
