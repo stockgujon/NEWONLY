@@ -97,6 +97,14 @@ INDEX_DISPLAY_NAMES = {
     "IXIC": "那斯達克",
 }
 
+# ------------------------------------------------------------
+# 產業類股熱力圖設定
+# ------------------------------------------------------------
+# 已實際連線驗證過此端點格式，欄位為清楚的中文名稱（指數/收盤指數/漲跌/漲跌點數/漲跌百分比）
+SECTOR_INDEX_URL = "https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX"
+# 排除掉已被更細分類取代的舊版彙總分類，避免跟細分類重複顯示
+EXCLUDED_SECTOR_NAMES = {"水泥窯製類指數", "塑膠化工類指數", "機電類指數", "化學生技醫療類指數"}
+
 
 # ============================================================
 # 資料庫
@@ -126,6 +134,14 @@ def init_db():
             close_value REAL NOT NULL,
             fetched_at TEXT NOT NULL,
             UNIQUE(index_code, date)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sector_heatmap (
+            sector_name TEXT PRIMARY KEY,
+            pct_change REAL NOT NULL,
+            date TEXT NOT NULL,
+            fetched_at TEXT NOT NULL
         )
     """)
     conn.commit()
@@ -405,6 +421,43 @@ def fetch_us_indices_data(conn):
     conn.commit()
 
 
+def fetch_sector_heatmap(conn):
+    """14:30時段執行：抓產業類股當日漲跌幅。
+    已實際連線驗證過此端點格式正確，欄位為清楚的中文名稱，
+    不需要像之前那樣用範圍檢測猜欄位。"""
+    data = fetch_json_with_retry(SECTOR_INDEX_URL)
+    if not data:
+        print("[警告] 產業類股熱力圖資料抓取失敗，本次跳過")
+        return
+
+    today = datetime.date.today().isoformat()
+    count = 0
+    for item in data:
+        name = item.get("指數", "")
+        if not name.endswith("類指數") or name in EXCLUDED_SECTOR_NAMES:
+            continue
+        try:
+            pct_str = item.get("漲跌百分比", "").replace(",", "")
+            sign = -1 if item.get("漲跌") == "-" else 1
+            pct = sign * abs(float(pct_str))
+        except (ValueError, TypeError):
+            continue
+
+        try:
+            conn.execute(
+                """INSERT OR REPLACE INTO sector_heatmap
+                   (sector_name, pct_change, date, fetched_at)
+                   VALUES (?, ?, ?, ?)""",
+                (name, pct, today, datetime.datetime.now().isoformat()),
+            )
+            count += 1
+        except sqlite3.Error as e:
+            print(f"[警告] 存入產業熱力圖資料失敗: {e}")
+
+    conn.commit()
+    print(f"[資訊] 產業類股熱力圖抓取到 {count} 個分類")
+
+
 # ============================================================
 # 產生網頁
 # ============================================================
@@ -652,12 +705,55 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     color: var(--muted);
     margin: 4px 0 0;
   }}
+  .heatmap-grid {{
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }}
+  .heat-block {{
+    border-radius: 4px;
+    padding: 10px 8px;
+    text-align: center;
+    min-height: 64px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }}
+  .heat-name {{
+    font-size: 12px;
+    font-weight: 500;
+    margin: 0 0 4px;
+    line-height: 1.3;
+  }}
+  .heat-pct {{
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0;
+  }}
+  .legend {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 16px;
+    font-size: 11px;
+    color: var(--muted);
+  }}
+  .legend-bar {{
+    width: 160px;
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right, #1E7A4C, #F7F6F2, #B23A2E);
+  }}
   @media (max-width: 640px) {{
     .chart-grid {{
       grid-template-columns: 1fr;
     }}
     .value-grid {{
       grid-template-columns: repeat(2, 1fr);
+    }}
+    .heatmap-grid {{
+      grid-template-columns: repeat(3, 1fr);
     }}
   }}
   .site-footer {{
@@ -721,6 +817,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </header>
 
   {index_section}
+
+  {heatmap_section}
 
   {macro_section}
 
@@ -890,8 +988,64 @@ def render_index_section(conn):
     </section>"""
 
 
+def pct_to_heat_color(pct):
+    """紅漲綠跌，幅度越大顏色越深（台灣習慣）"""
+    clamped = max(-3, min(3, pct))
+    ratio = abs(clamped) / 3
+    if pct >= 0:
+        r = 247 - round((247 - 178) * ratio)
+        g = 246 - round((246 - 58) * ratio)
+        b = 242 - round((242 - 46) * ratio)
+    else:
+        r = 247 - round((247 - 30) * ratio)
+        g = 246 - round((246 - 122) * ratio)
+        b = 242 - round((242 - 76) * ratio)
+    return f"rgb({r},{g},{b})"
+
+
+def render_sector_heatmap_section(conn):
+    rows = conn.execute(
+        """SELECT sector_name, pct_change, date FROM sector_heatmap
+           ORDER BY pct_change DESC"""
+    ).fetchall()
+
+    if not rows:
+        return """
+    <section class="card">
+        <div class="section-head"><h2>產業類股熱力圖</h2></div>
+        <p class="empty-state">目前沒有資料，稍後會自動更新。</p>
+    </section>"""
+
+    latest_date = rows[0][2]
+    blocks = []
+    for name, pct, _date in rows:
+        display_name = name.replace("類指數", "")
+        text_color = "#FFFFFF" if abs(pct) > 1.5 else "var(--ink)"
+        sign = "+" if pct >= 0 else ""
+        blocks.append(f"""
+        <div class="heat-block" style="background:{pct_to_heat_color(pct)};">
+            <p class="heat-name" style="color:{text_color};">{escape(display_name)}</p>
+            <p class="heat-pct" style="color:{text_color};">{sign}{pct:.2f}%</p>
+        </div>""")
+
+    return f"""
+    <section class="card">
+        <div class="section-head">
+            <h2>產業類股熱力圖</h2>
+            <span class="updated-badge">{escape(latest_date)} 收盤</span>
+        </div>
+        <div class="heatmap-grid">{"".join(blocks)}</div>
+        <div class="legend">
+            <span>下跌</span>
+            <div class="legend-bar"></div>
+            <span>上漲</span>
+        </div>
+    </section>"""
+
+
 def build_html(conn):
     index_section = render_index_section(conn)
+    heatmap_section = render_sector_heatmap_section(conn)
 
     macro_rows = get_recent_articles(conn, "macro")
     macro_section = render_macro_section(macro_rows)
@@ -906,6 +1060,7 @@ def build_html(conn):
     html = HTML_TEMPLATE.format(
         build_time=build_time,
         index_section=index_section,
+        heatmap_section=heatmap_section,
         macro_section=macro_section,
         taiwan_stock_list=taiwan_stock_list,
         intl_stock_list=intl_stock_list,
@@ -935,6 +1090,10 @@ def main():
             fetch_tw_indices(conn)
         except Exception as e:
             print(f"[警告] 台股指數抓取過程發生例外，已略過本次: {e}")
+        try:
+            fetch_sector_heatmap(conn)
+        except Exception as e:
+            print(f"[警告] 產業熱力圖抓取過程發生例外，已略過本次: {e}")
     if time_slot in ("07:30", "manual"):
         try:
             fetch_us_indices_data(conn)
