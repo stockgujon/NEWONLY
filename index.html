@@ -116,6 +116,74 @@
     color: var(--muted);
     font-size: 14px;
   }
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .chart-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+  }
+  .chart-card h3 {
+    font-size: 14px;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .sparkline {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .sparkline .axis-label {
+    font-size: 9px;
+    fill: var(--muted);
+    font-family: 'Noto Sans TC', sans-serif;
+  }
+  .value-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+  }
+  .value-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .value-card h4 {
+    font-size: 12px;
+    margin: 0 0 6px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .value-number {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .value-change {
+    font-size: 12px;
+    margin: 4px 0 0;
+    font-weight: 600;
+  }
+  .value-date {
+    font-size: 10px;
+    color: var(--muted);
+    margin: 4px 0 0;
+  }
+  @media (max-width: 640px) {
+    .chart-grid {
+      grid-template-columns: 1fr;
+    }
+    .value-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
   .site-footer {
     text-align: center;
     margin-top: 32px;
@@ -173,8 +241,54 @@
       </svg>
       台灣財經儀表板
     </h1>
-    <p>總經 · 台股與國際股市 · 國內ETF　最後產生時間：2026-09-11 07:36（台灣時間）</p>
+    <p>總經 · 台股與國際股市 · 國內ETF　最後產生時間：2026-09-11 11:29（台灣時間）</p>
   </header>
+
+  
+    <section class="card">
+        <div class="section-head">
+            <h2>大盤指數</h2>
+        </div>
+        <div class="chart-grid"><div class="chart-card">
+        <h3>加權指數</h3>
+        <svg viewBox="0 0 300 90" xmlns="http://www.w3.org/2000/svg" class="sparkline">
+        <polyline points="6.0,63.6 8.6,66.0 11.2,63.4 13.8,57.3 16.4,56.9 19.0,54.7 21.6,54.6 24.2,51.3 26.8,49.6 29.4,48.0 31.9,49.3 34.5,48.7 37.1,46.1 39.7,45.0 42.3,45.7 44.9,40.8 47.5,38.1 50.1,38.5 52.7,39.4 55.3,40.9 57.9,33.8 60.5,33.6 63.1,32.1 65.7,29.0 68.3,30.3 70.9,29.5 73.5,29.1 76.1,31.2 78.6,29.7 81.2,32.0 83.8,33.1 86.4,35.9 89.0,36.5 91.6,31.2 94.2,27.7 96.8,22.2 99.4,22.7 102.0,19.8 104.6,22.2 107.2,17.9 109.8,15.5 112.4,14.6 115.0,11.1 117.6,14.2 120.2,16.6 122.8,22.8 125.4,18.0 127.9,23.9 130.5,24.2 133.1,20.1 135.7,15.3 138.3,13.6 140.9,13.4 143.5,11.0 146.1,6.0 148.7,8.5 151.3,12.7 153.9,11.9 156.5,18.5 159.1,16.8 161.7,12.4 164.3,8.9 166.9,9.9 169.5,9.8 172.1,10.7 174.6,14.9 177.2,13.9 179.8,15.4 182.4,15.3 185.0,17.9 187.6,14.3 190.2,14.4 192.8,26.1 195.4,26.9 198.0,19.9 200.6,17.5 203.2,17.4 205.8,22.2 208.4,22.2 211.0,30.3 213.6,36.5 216.2,36.9 218.8,24.3 221.4,23.2 223.9,23.3 226.5,18.4 229.1,19.2 231.7,19.9 234.3,17.1 236.9,16.4 239.5,14.8 242.1,12.8 244.7,13.6 247.3,13.5 249.9,15.6 252.5,18.0 255.1,17.1 257.7,16.0 260.3,17.8 262.9,16.2 265.5,13.6 268.1,13.0 270.6,11.6 273.2,12.4 275.8,9.1 278.4,12.2 281.0,13.5 283.6,10.7 286.2,7.6 288.8,8.5 291.4,8.2 294.0,9.2" fill="none" stroke="#B23A2E" stroke-width="2"
+                  stroke-linejoin="round" stroke-linecap="round"/>
+        <text x="6.0" y="86" text-anchor="middle" class="axis-label">4月</text><text x="57.9" y="86" text-anchor="middle" class="axis-label">5月</text><text x="109.8" y="86" text-anchor="middle" class="axis-label">6月</text><text x="164.3" y="86" text-anchor="middle" class="axis-label">7月</text><text x="221.4" y="86" text-anchor="middle" class="axis-label">8月</text><text x="275.8" y="86" text-anchor="middle" class="axis-label">9月</text>
+    </svg>
+    </div><div class="chart-card">
+        <h3>櫃買指數</h3>
+        <svg viewBox="0 0 300 90" xmlns="http://www.w3.org/2000/svg" class="sparkline">
+        <polyline points="6.0,62.6 8.6,58.8 11.2,60.0 13.8,51.6 16.4,35.9 19.0,36.0 21.6,37.2 24.2,33.2 26.8,32.2 29.4,31.5 31.9,29.5 34.5,18.8 37.1,24.3 39.7,24.5 42.3,6.0 44.9,33.2 47.5,41.5 50.1,45.3 52.7,48.9 55.3,41.0 57.9,41.1 60.5,33.8 63.1,9.0 65.7,24.4 68.3,10.1 70.9,24.0 73.5,26.9 76.1,39.3 78.6,27.2 81.2,24.9 83.8,42.9 86.4,38.0 89.0,37.5 91.6,37.0 94.2,30.7 96.8,25.3 99.4,25.3 102.0,8.6 104.6,11.8 107.2,23.5 109.8,21.1 112.4,16.0 115.0,25.8 117.6,30.2 120.2,22.2 122.8,40.1 125.4,31.7 127.9,17.5 130.5,27.5 133.1,40.1 135.7,41.7 138.3,34.0 140.9,34.5 143.5,35.3 146.1,30.9 148.7,23.3 151.3,42.1 153.9,37.6 156.5,29.1 159.1,49.9 161.7,48.7 164.3,33.0 166.9,34.3 169.5,26.8 172.1,25.7 174.6,31.6 177.2,44.1 179.8,45.4 182.4,42.6 185.0,31.5 187.6,52.5 190.2,50.7 192.8,49.5 195.4,52.9 198.0,59.6 200.6,53.4 203.2,57.1 205.8,64.1 208.4,62.6 211.0,60.2 213.6,47.4 216.2,55.7 218.8,63.6 221.4,66.0 223.9,61.1 226.5,56.4 229.1,58.3 231.7,59.5 234.3,56.9 236.9,57.7 239.5,53.6 242.1,48.7 244.7,51.1 247.3,63.0 249.9,49.5 252.5,60.8 255.1,57.3 257.7,57.6 260.3,60.2 262.9,65.1 265.5,54.0 268.1,49.0 270.6,38.3 273.2,52.0 275.8,55.4 278.4,59.3 281.0,51.5 283.6,61.8 286.2,60.6 288.8,56.9 291.4,58.8 294.0,60.1" fill="none" stroke="#B23A2E" stroke-width="2"
+                  stroke-linejoin="round" stroke-linecap="round"/>
+        <text x="6.0" y="86" text-anchor="middle" class="axis-label">4月</text><text x="57.9" y="86" text-anchor="middle" class="axis-label">5月</text><text x="109.8" y="86" text-anchor="middle" class="axis-label">6月</text><text x="164.3" y="86" text-anchor="middle" class="axis-label">7月</text><text x="221.4" y="86" text-anchor="middle" class="axis-label">8月</text><text x="275.8" y="86" text-anchor="middle" class="axis-label">9月</text>
+    </svg>
+    </div></div>
+        <div class="value-grid"><div class="value-card">
+        <h4>加權指數</h4>
+        <p class="value-number">46,940.49</p>
+        <p class="value-change" style="color:#1E7A4C;">
+            ▼ 242.87（0.51%）
+        </p>
+        <p class="value-date">2026-09-10</p>
+    </div><div class="value-card">
+        <h4>櫃買指數</h4>
+        <p class="value-number">804,217.00</p>
+        <p class="value-change" style="color:#1E7A4C;">
+            ▼ 28,447.00（3.42%）
+        </p>
+        <p class="value-date">2026-09-10</p>
+    </div><div class="value-card">
+            <h4>費城半導體</h4>
+            <p class="empty-state">暫無資料</p>
+        </div><div class="value-card">
+            <h4>S&P500</h4>
+            <p class="empty-state">暫無資料</p>
+        </div><div class="value-card">
+            <h4>那斯達克</h4>
+            <p class="empty-state">暫無資料</p>
+        </div></div>
+    </section>
 
   
     <section class="card">
@@ -182,6 +296,16 @@
             <h2>總經新聞</h2>
         </div>
         <ul class="news-list">
+        <li class="news-item">
+            <a href="https://money.udn.com/money/story/5599/9747926" target="_blank" rel="noopener">川普許普發5000美元選舉承諾　財政來源受矚各界靜觀其變</a>
+            <p class="news-desc">美國總統川普公開宣稱，期中選舉共和黨若繼續掌握參眾兩院，將不分黨派向成年人發放5000美元（約新台幣16萬元）「川普紅利...</p>
+            <span class="news-meta">經濟日報 · Fri, 11 Sep 2026 09:31:21 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://money.udn.com/money/story/5599/9747903" target="_blank" rel="noopener">川普再談每人發5000美元！稱無需國會批准 選後才發原因曝光</a>
+            <p class="news-desc">美國總統川普9日在共和黨期中選舉大會宣布，如果共和黨選後繼續掌控參眾兩院，就向每名美國成年公民發放5000美元「川普紅利」，隔天分別接受CBS及福斯新聞專訪，透露更多細節。</p>
+            <span class="news-meta">經濟日報 · Fri, 11 Sep 2026 09:18:05 +0800</span>
+        </li>
         <li class="news-item">
             <a href="https://money.udn.com/money/story/5599/9747438" target="_blank" rel="noopener">WTO：全球貨物貿易持續增長</a>
             <p class="news-desc">世界貿易組織（WTO）表示，儘管地緣政治和政策相關不確定性揮之不去，但全球貨物貿易自6月以來有所增強，顯示商品貿易流動仍有韌性，不過不可諱言的是風險依然較高。</p>
@@ -225,6 +349,26 @@
     </div>
     <h3 style="font-size:14px;color:var(--muted);margin:0 0 8px;">台股</h3>
     <ul class="news-list">
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/afe/202609110027.aspx" target="_blank" rel="noopener">新台幣開盤貶3.2分　為31.58元</a>
+            <p class="news-desc">（中央社台北11日電）台北外匯市場新台幣兌美元匯率今天以31.58元開盤，貶3.2分。</p>
+            <span class="news-meta">中央社 · Fri, 11 Sep 2026 09:07:36 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/afe/202609110026.aspx" target="_blank" rel="noopener">台股開盤跌289.28點</a>
+            <p class="news-desc">（中央社台北11日電）台北股市今天開盤跌289.28點，加權股價指數為46651.21點，成交金額新台幣109.84億元。1150911</p>
+            <span class="news-meta">中央社 · Fri, 11 Sep 2026 09:03:34 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/aopl/202609110022.aspx" target="_blank" rel="noopener">英格蘭擬自2028年向過夜旅客徵稅　預計不超過5%</a>
+            <p class="news-desc">（中央社記者陳韻聿倫敦10日專電）英國住房、社區暨地方政府事務部今天宣布，為強化地方建設、還權於地方並擴大地方財源，擬賦予英格蘭各都會區及市鎮政府權利，向不分國籍的過夜旅客徵稅，以住宿費用為基準，收取一定百分比的稅款，且不須設上限。</p>
+            <span class="news-meta">中央社 · Fri, 11 Sep 2026 08:43:25 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/afe/202609110020.aspx" target="_blank" rel="noopener">國際油價受美伊戰爭影響走高　費半收跌台股觀望</a>
+            <p class="news-desc">（中央社記者潘智義台北11日電）美伊戰爭促使國際油價攀升，漲至5月以來的高點，通膨疑慮再起，美股下挫，費城半導體指數下跌2.66%，台積電ADR跌1.68%，下週美國聯準會（Fed）將召開利率會議，台股觀望氣氛增加。</p>
+            <span class="news-meta">中央社 · Fri, 11 Sep 2026 08:29:21 +0800</span>
+        </li>
         <li class="news-item">
             <a href="https://www.cna.com.tw/news/afe/202609110011.aspx" target="_blank" rel="noopener">美財政部搶救債市　10年期國債殖利率仍狂升</a>
             <p class="news-desc">（中央社記者廖漢原華盛頓10日專電）美國財政部今天標售30年期政府公債及回購長天期公債，但效果未如預期，指標性10年期國債殖利率大漲11個基點，最高升至4.9630%。</p>
@@ -279,29 +423,29 @@
             <a href="https://www.cna.com.tw/news/aopl/202609100356.aspx" target="_blank" rel="noopener">伊朗戰事推高能源價格　美國8月PPI年增率升至5.4%</a>
             <p class="news-desc">（中央社華盛頓10日綜合外電報導）美國政府今天公布數據指出，8月生產者物價指數（PPI）年增率為5.4%，明顯高於7月數據，主因在於能源價格因伊朗戰事而飆升。</p>
             <span class="news-meta">中央社 · Thu, 10 Sep 2026 21:38:44 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/afe/202609100354.aspx" target="_blank" rel="noopener">國銀7月放款增額首度突破兆元　創下單月新高</a>
-            <p class="news-desc">（中央社記者蘇思云台北10日電）金管會統計顯示，本國銀行今年7月底放款餘額為新台幣48兆8528億元，月增1兆399億元，增額創史上單月新高，前7月放款增額也達4兆元。金管會表示，受惠AI產業與半導體產業資金需求持續強勁，帶動民營企業供應鏈成長，加上進入7、8月的股利發放旺季，推升企業資金調度需求。</p>
-            <span class="news-meta">中央社 · Thu, 10 Sep 2026 21:27:38 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/aopl/202609100351.aspx" target="_blank" rel="noopener">歐洲央行調高基準利率1碼至2.5%　今年以來第2度升息</a>
-            <p class="news-desc">（中央社法蘭克福10日綜合外電報導）歐洲中央銀行（ECB）今天調高基準利率1碼至2.5%，以因應中東衝突再起推高能源成本，增加通膨升溫壓力。</p>
-            <span class="news-meta">中央社 · Thu, 10 Sep 2026 21:20:31 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/afe/202609100350.aspx" target="_blank" rel="noopener">澳紐商會表揚企業　台澳合作拓至半導體、再生能源</a>
-            <p class="news-desc">（中央社記者謝怡璇台北10日電）澳洲紐西蘭商會今晚舉行商業大獎頒獎典禮，表揚促進台澳紐在投資、貿易等方面合作的企業。澳洲紐西蘭商會表示，近年台澳經貿合作已從傳統食品、能源與原物料，拓展至生技醫療、半導體、再生能源等領域。</p>
-            <span class="news-meta">中央社 · Thu, 10 Sep 2026 21:09:29 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/afe/202609100349.aspx" target="_blank" rel="noopener">金管會：前7月信用卡簽帳金額破3.3兆　創同期新高</a>
-            <p class="news-desc">（中央社記者高華謙台北10日電）金管會今天表示，今年7月信用卡簽帳金額為新台幣4544億元，創史上單月第5高紀錄，不過月減42.3%、年減3成，皆為報稅入帳基期較高所致，累計前7月信用卡簽帳金額為3兆3313億元，創史上同期新高，年增率14.75%。</p>
-            <span class="news-meta">中央社 · Thu, 10 Sep 2026 21:00:27 +0800</span>
         </li></ul>
     <h3 style="font-size:14px;color:var(--muted);margin:16px 0 8px;">國際大事（牽動台股）</h3>
     <ul class="news-list">
+        <li class="news-item">
+            <a href="https://money.udn.com/money/story/5599/9748170" target="_blank" rel="noopener">全球債市拋售！從美債燒到亞債 貝森特淡化風險 但央行升息大潮將至？</a>
+            <p class="news-desc">全球債市賣壓沉重，公債殖利率今（11日）繼續飆高，債券空頭正推升指標性的美國公債殖利率即將突破5%，油價飆漲加劇通膨風險，迫使投資人考量全球央行進一步緊縮貨幣政策的可能性。不過，美國財長貝森特並不認同市場擔憂財政部周四公債回購規模低於上限，還淡化對殖利率飆升的疑慮。</p>
+            <span class="news-meta">經濟日報 · Fri, 11 Sep 2026 11:05:02 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://money.udn.com/money/story/5599/9747958" target="_blank" rel="noopener">日經指數盤中重挫3%　油價飆升通膨憂慮加劇</a>
+            <p class="news-desc">由於中東局勢再度升溫且國際油價飆升，市場擔憂可能加劇通膨壓力，日本日經指數今天早盤應聲重挫逾3%</p>
+            <span class="news-meta">經濟日報 · Fri, 11 Sep 2026 09:45:31 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://money.udn.com/money/story/5599/9747925" target="_blank" rel="noopener">銅價創高後重挫逾5% 川普關稅若踩煞車恐再崩15%</a>
+            <p class="news-desc">美國政府擔心推高通膨，遲遲未決定是否對精煉銅加徵關稅。隨著11月期中選舉逼近，川普政府重視物價負擔，關稅可能生變的消息引爆多頭獲利了結。倫敦銅價周四由歷史高點急跌逾3%，紐約銅價一度重挫逾5%。</p>
+            <span class="news-meta">經濟日報 · Fri, 11 Sep 2026 09:31:16 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://money.udn.com/money/story/5599/9747920" target="_blank" rel="noopener">川普喊出普發5000美元　是否加劇通膨等問題一次看</a>
+            <p class="news-desc">美國總統川普承諾，若共和黨在11月期中選舉後繼續掌控參眾兩院，將發給每名成人5000美元（約新台幣16萬元），引發外界對...</p>
+            <span class="news-meta">經濟日報 · Fri, 11 Sep 2026 09:30:30 +0800</span>
+        </li>
         <li class="news-item">
             <a href="https://money.udn.com/money/story/123398/9747774" target="_blank" rel="noopener">美股收盤／四大指數收黑 費半挫跌2.6% 受美債殖利率猛升油價飆6%拖累</a>
             <p class="news-desc">美國股市周四（10日）收低，連續第四個交易日下跌，為6月以來最長連跌，因8月生產者物價數據和油價飆升推高了美國公債殖利率，也增強投資人對聯準會下周升息的預期。</p>
@@ -356,26 +500,6 @@
             <a href="https://money.udn.com/money/story/5599/9745590" target="_blank" rel="noopener">布油逼近102美元 伊朗表示已做好準備應對更激烈的衝突</a>
             <p class="news-desc">【彭博】-- 隨著中東地區敵對行動爆發，伊朗宣稱已做好準備應對更激烈的戰爭，加劇了市場對荷莫茲海峽能源供應可能遭受更嚴重中斷的擔憂，布蘭特原油期貨逼近每桶102美元。這一全球基準已連漲五日，周三自去年7月以來首次收於三位數以上。WTI原油期貨價格徘徊在每桶97美元左右。</p>
             <span class="news-meta">經濟日報 · Thu, 10 Sep 2026 21:49:43 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5599/9747307" target="_blank" rel="noopener">歐洲央行調高基準利率1碼至2.5%　今年以來第2度升息</a>
-            <p class="news-desc">歐洲中央銀行（ECB）今天調高基準利率1碼至2.5%，以因應中東衝突再起推高能源成本，增加通膨升溫壓力</p>
-            <span class="news-meta">經濟日報 · Thu, 10 Sep 2026 21:30:29 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5599/9745428" target="_blank" rel="noopener">美中十年期國債殖利率差創紀錄新高 美國財政部國債回購規模遜預期</a>
-            <p class="news-desc">【彭博】-- 美債殖利率走高加之油價高企，令美國與中國大陸十年期國債殖利率差進一步走闊，達到317點至紀錄新高。</p>
-            <span class="news-meta">經濟日報 · Thu, 10 Sep 2026 21:13:55 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5599/9747284" target="_blank" rel="noopener">美伊衝突恐持久化 布蘭特衝上105美元 西德州突破100美元</a>
-            <p class="news-desc">美伊情勢不降反升，國際油價隨之持續上攻，布蘭特原油期貨價10日衝破每桶105美元，西德州也攻克100美元整數大關，這兩個指標油價本周來皆已大漲逾9%，且站上5月下旬以來最高水準。</p>
-            <span class="news-meta">經濟日報 · Thu, 10 Sep 2026 21:11:39 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/123398/9747239" target="_blank" rel="noopener">美國8月 PPI 好壞參半 美股期指挫低</a>
-            <p class="news-desc">美國8月躉售物價表現錯綜，對聯準會（Fed）15、16日的政策會議來說，數據好壞參半，未能改變市場的利率預期，美股期指應聲下挫。</p>
-            <span class="news-meta">經濟日報 · Thu, 10 Sep 2026 20:46:55 +0800</span>
         </li></ul>
   </section>
 
@@ -384,6 +508,11 @@
       <h2>國內ETF</h2>
     </div>
     <ul class="news-list">
+        <li class="news-item">
+            <a href="https://money.udn.com/money/story/5618/9747956" target="_blank" rel="noopener">把握台股核心增長行情 首選「這款」ETF</a>
+            <p class="news-desc">近年來受惠AI科技浪潮，帶動台股企業獲利與股價表現，也吸引投資大眾以台股ETF來參與行情。市場法人表示，隨AI需求強勁，台廠又站在全球供應鏈中的有利位置，也讓台股產業結構大幅轉變，科技產業成主流，並邁入全新的成長階段。</p>
+            <span class="news-meta">經濟日報 · Fri, 11 Sep 2026 09:44:44 +0800</span>
+        </li>
         <li class="news-item">
             <a href="https://money.udn.com/money/story/5618/9747340" target="_blank" rel="noopener">台股市值型 ETF 帶勁</a>
             <p class="news-desc">近年來受惠AI科技浪潮，帶動台股企業獲利與股價表現，也吸引投資人以台股ETF來參與行情。隨AI需求強勁，台廠又站在全球供應鏈中的有利位置，也讓台股產業結構大幅轉變。</p>
@@ -433,21 +562,6 @@
             <a href="https://money.udn.com/money/story/5618/9745892" target="_blank" rel="noopener">26檔 ETF 台股創高後仍賺錢！00919領軍 價量齊揚前十都有「一特色」</a>
             <p class="news-desc">近期大盤氣勢如虹，劍指歷史高點，而上次歷史新高是6月22日，統計創新高以來，仍有26檔原型台股ETF維持正報酬，其中期間上漲3%以上、日均量交投熱絡呈現價量齊揚前十名的台股ETF，包括群益台灣精選高息（00919）、元大高股息（0056）、統一台灣高息動能（00939）、元大台灣高息低波（00713）等清一色都是高息型。以近月表現來看00919漲幅居冠。</p>
             <span class="news-meta">經濟日報 · Thu, 10 Sep 2026 11:53:16 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5618/9745572" target="_blank" rel="noopener">非投等債 ETF 息收前十強年化配息率皆逾8% 這兩檔逾10%最靚</a>
-            <p class="news-desc">進入9月債券ETF除息旺季，非投等債ETF息收誘人，根據目前已公布配息的債券ETF資料顯示，9月非投等債券ETF年化配息率前十強皆達8%以上，其中，台新美國非投等債（00989B）及主動聯博全球非投（00984D）年化配息率皆突破10%最亮眼，00989B達10.53%衝第一。</p>
-            <span class="news-meta">經濟日報 · Thu, 10 Sep 2026 10:00:17 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5618/9745453" target="_blank" rel="noopener">野村投信解密10年數據：定期定額創新科技 ETF 有望掌握 AI 長線趨勢</a>
-            <p class="news-desc">台股近期進入盤整期，加權指數自8月14日回檔後陷入橫盤，指數忽漲忽跌，投資人難掌握進場時點。野村投信表示，AI長線需求並未因盤勢整理而改變，輝達（NVIDIA）於GTC 2026釋出AI五層架構、LPU新晶片，以及光、銅並進等趨勢，顯示AI基礎建設持續升級。</p>
-            <span class="news-meta">經濟日報 · Thu, 10 Sep 2026 09:12:26 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5618/9745410" target="_blank" rel="noopener">大盤新高以來 價量齊揚前十名清一色為台股高息 ETF</a>
-            <p class="news-desc">近期大盤氣勢如虹，劍指歷史高點，大盤上次歷史新高是6月22日，統計創新高以來，仍有26檔原型台股ETF維持正報酬，其中，期間上漲3%以上、日均量交投熱絡呈現價量齊揚前十名的台股ETF，包括群益台灣精選高息（00919）、元大高股息（0056）、統一台灣高息動能（00939）、元大台灣高息低波（00713）等清一色都是高息型，以近月表現來看00919漲幅居冠。</p>
-            <span class="news-meta">經濟日報 · Thu, 10 Sep 2026 08:51:09 +0800</span>
         </li></ul>
   </section>
 
