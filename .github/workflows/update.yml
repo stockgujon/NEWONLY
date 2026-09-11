@@ -30,12 +30,16 @@ jobs:
       - name: 判斷目前時段
         id: slot
         run: |
-          HOUR_UTC=$(date -u +%H)
-          if [ "$HOUR_UTC" == "23" ]; then echo "slot=07:30" >> $GITHUB_OUTPUT
-          elif [ "$HOUR_UTC" == "04" ]; then echo "slot=12:30" >> $GITHUB_OUTPUT
-          elif [ "$HOUR_UTC" == "06" ]; then echo "slot=14:30" >> $GITHUB_OUTPUT
-          elif [ "$HOUR_UTC" == "13" ]; then echo "slot=21:00" >> $GITHUB_OUTPUT
-          else echo "slot=manual" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "slot=manual" >> $GITHUB_OUTPUT
+          else
+            HOUR_UTC=$(date -u +%H)
+            if [ "$HOUR_UTC" == "23" ]; then echo "slot=07:30" >> $GITHUB_OUTPUT
+            elif [ "$HOUR_UTC" == "04" ]; then echo "slot=12:30" >> $GITHUB_OUTPUT
+            elif [ "$HOUR_UTC" == "06" ]; then echo "slot=14:30" >> $GITHUB_OUTPUT
+            elif [ "$HOUR_UTC" == "13" ]; then echo "slot=21:00" >> $GITHUB_OUTPUT
+            else echo "slot=manual" >> $GITHUB_OUTPUT
+            fi
           fi
 
       - name: 執行抓取與網頁產生程式
