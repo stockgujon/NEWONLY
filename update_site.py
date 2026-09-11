@@ -424,8 +424,9 @@ def fetch_us_indices_data(conn):
 
 
 def fetch_sector_heatmap(conn):
-    """21:00時段執行：抓產業類股當日漲跌幅（原訂14:30，因證交所資料常延遲更新，
-    改到21:00較能確保抓到當天的資料）。
+    """07:30時段執行（隔天早上抓前一交易日資料）：抓產業類股當日漲跌幅。
+    原訂14:30、後改21:00皆發現證交所資料尚未更新完成，
+    改到隔天07:30（與美股指數同時段），有近10小時緩衝時間，較能確保資料已備妥。
     已實際連線驗證過此端點格式正確，欄位為清楚的中文名稱，
     不需要像之前那樣用範圍檢測猜欄位。
     注意：日期一律採用API回傳資料本身附帶的「日期」欄位（民國年格式），
@@ -1106,13 +1107,15 @@ def main():
             fetch_tw_indices(conn)
         except Exception as e:
             print(f"[警告] 台股指數抓取過程發生例外，已略過本次: {e}")
+    if time_slot in ("07:30", "manual"):
+        try:
+            fetch_us_indices_data(conn)
+        except Exception as e:
+            print(f"[警告] 美股指數抓取過程發生例外，已略過本次: {e}")
         try:
             fetch_sector_heatmap(conn)
         except Exception as e:
             print(f"[警告] 產業熱力圖抓取過程發生例外，已略過本次: {e}")
-    if time_slot in ("07:30", "manual"):
-        try:
-            fetch_us_indices_data(conn)
         except Exception as e:
             print(f"[警告] 美股指數抓取過程發生例外，已略過本次: {e}")
 
