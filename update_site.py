@@ -69,6 +69,30 @@ ARTICLES_MAX = 15
 # 優先只看 24 小時內的新聞；不夠的話才放寬到這個天數
 FALLBACK_DAYS = 3
 
+# ------------------------------------------------------------
+# 指數區塊設定
+# ------------------------------------------------------------
+# 台股兩指數：官方來源，累積約半年(130個交易日)歷史供走勢圖使用
+TAIEX_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?response=json&date={date}"
+TPEX_URL = "https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_index/st41_result.php?l=zh-tw&d={roc_date}&_={ts}"
+TW_INDEX_HISTORY_DAYS = 130      # 台股指數保留的交易日數量（約半年）
+TW_INDEX_BACKFILL_MONTHS = 6     # 第一次執行時，回補過去幾個月的歷史
+
+# 美股三指數：非官方來源（Stooq），只保留最新兩筆用來算漲跌
+STOOQ_URL = "https://stooq.com/q/d/l/?s={symbol}&i=d"
+US_INDICES = [
+    ("SOX", "^sox", "費城半導體"),
+    ("SPX", "^spx", "S&P500"),
+    ("IXIC", "^ndq", "那斯達克"),
+]
+INDEX_DISPLAY_NAMES = {
+    "TAIEX": "加權指數",
+    "TPEX": "櫃買指數",
+    "SOX": "費城半導體",
+    "SPX": "S&P500",
+    "IXIC": "那斯達克",
+}
+
 
 # ============================================================
 # 資料庫
@@ -88,6 +112,16 @@ def init_db():
             pub_date_ts REAL,
             fetched_at TEXT NOT NULL,
             description TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS index_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            index_code TEXT NOT NULL,
+            date TEXT NOT NULL,
+            close_value REAL NOT NULL,
+            fetched_at TEXT NOT NULL,
+            UNIQUE(index_code, date)
         )
     """)
     conn.commit()
@@ -212,6 +246,172 @@ def fetch_all_sources(conn):
             if contains_any(title + desc, ETF_KEYWORDS):
                 save_article(conn, title, link, "經濟日報", "etf", pub_date, desc)
 
+    conn.commit()
+
+
+# ============================================================
+# 指數抓取（加權指數、櫃買指數、美股三指數）
+# ============================================================
+
+def save_index_point(conn, index_code, date_str, close_value):
+    """存一筆指數收盤值，同一天重複存入會被忽略（不會產生重複資料）"""
+    try:
+        conn.execute(
+            """INSERT OR IGNORE INTO index_history (index_code, date, close_value, fetched_at)
+               VALUES (?, ?, ?, ?)""",
+            (index_code, date_str, close_value, datetime.datetime.now().isoformat()),
+        )
+    except sqlite3.Error as e:
+        print(f"[警告] 存入指數資料失敗: {e}")
+
+
+def index_history_count(conn, index_code):
+    row = conn.execute(
+        "SELECT COUNT(*) FROM index_history WHERE index_code = ?", (index_code,)
+    ).fetchone()
+    return row[0] if row else 0
+
+
+def trim_index_history(conn, index_code, keep_days):
+    """只保留最近 keep_days 筆，避免資料庫無限長大"""
+    conn.execute(
+        """DELETE FROM index_history WHERE index_code = ? AND date NOT IN (
+               SELECT date FROM index_history WHERE index_code = ?
+               ORDER BY date DESC LIMIT ?
+           )""",
+        (index_code, index_code, keep_days),
+    )
+
+
+def fetch_taiex_month(year_month):
+    """抓證交所加權指數，year_month 格式 YYYYMM，回傳 [(date, close), ...]"""
+    date_param = f"{year_month}01"
+    url = TAIEX_URL.format(date=date_param)
+    feed_data = fetch_json_with_retry(url)
+    if not feed_data or "data" not in feed_data:
+        return []
+    results = []
+    for row in feed_data["data"]:
+        try:
+            # 欄位：日期(民國), 成交股數, 成交金額, 成交筆數, 發行量加權股價指數, 漲跌點數
+            roc_date = row[0].replace(",", "")
+            y, m, d = roc_date.split("/")
+            date_str = f"{int(y) + 1911}-{int(m):02d}-{int(d):02d}"
+            close_value = float(row[4].replace(",", ""))
+            results.append((date_str, close_value))
+        except (ValueError, IndexError, AttributeError):
+            continue
+    return results
+
+
+def fetch_tpex_month(year_month):
+    """抓櫃買指數，year_month 格式 YYYYMM，回傳 [(date, close), ...]
+    注意：此端點路徑未經100%實測驗證，若格式有誤會安全地回傳空清單，
+    不影響其他區塊正常運作。"""
+    year = int(year_month[:4])
+    month = int(year_month[4:6])
+    roc_date = f"{year - 1911}/{month:02d}"
+    url = TPEX_URL.format(roc_date=roc_date, ts=int(time.time() * 1000))
+    feed_data = fetch_json_with_retry(url)
+    if not feed_data:
+        return []
+    rows = feed_data.get("aaData") or feed_data.get("tables", [{}])[0].get("data", [])
+    results = []
+    for row in rows:
+        try:
+            roc_date_str = row[0].replace(",", "")
+            y, m, d = roc_date_str.split("/")
+            date_str = f"{int(y) + 1911}-{int(m):02d}-{int(d):02d}"
+            close_value = float(str(row[1]).replace(",", ""))
+            results.append((date_str, close_value))
+        except (ValueError, IndexError, AttributeError):
+            continue
+    return results
+
+
+def fetch_json_with_retry(url, max_retries=3):
+    headers = {"User-Agent": USER_AGENT}
+    backoff_seconds = [60, 300, 900]
+    for attempt in range(max_retries):
+        try:
+            time.sleep(random.uniform(1, 5))
+            resp = requests.get(url, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                return resp.json()
+            print(f"[警告] {url} 回應狀態碼 {resp.status_code}")
+        except (requests.RequestException, ValueError) as e:
+            print(f"[警告] 抓取或解析 {url} 失敗: {e}")
+        if attempt < max_retries - 1:
+            time.sleep(backoff_seconds[attempt])
+    print(f"[錯誤] {url} 抓取失敗，已達最大重試次數")
+    return None
+
+
+def backfill_tw_index_if_needed(conn, index_code, fetch_month_fn):
+    """如果歷史資料不足100筆（代表還沒回補過），一次性回補過去幾個月"""
+    if index_history_count(conn, index_code) >= 100:
+        return
+    print(f"[資訊] {index_code} 歷史資料不足，開始一次性回補過去 {TW_INDEX_BACKFILL_MONTHS} 個月")
+    today = datetime.date.today()
+    for i in range(TW_INDEX_BACKFILL_MONTHS):
+        target_month = today.month - i
+        target_year = today.year
+        while target_month <= 0:
+            target_month += 12
+            target_year -= 1
+        year_month = f"{target_year}{target_month:02d}"
+        points = fetch_month_fn(year_month)
+        for date_str, close_value in points:
+            save_index_point(conn, index_code, date_str, close_value)
+        conn.commit()
+
+
+def fetch_us_index(symbol):
+    """從Stooq抓最新收盤值，回傳 (date, close) 或 None。
+    注意：此為非官方資料來源，若未來失效，會安全地回傳None，
+    畫面上會沿用資料庫裡最後一次成功抓到的數值並標示日期。"""
+    url = STOOQ_URL.format(symbol=symbol)
+    headers = {"User-Agent": USER_AGENT}
+    try:
+        time.sleep(random.uniform(1, 3))
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            return None
+        lines = resp.text.strip().split("\n")
+        if len(lines) < 2:
+            return None
+        last_line = lines[-1].split(",")
+        # 欄位：Date,Open,High,Low,Close,Volume
+        date_str = last_line[0]
+        close_value = float(last_line[4])
+        return date_str, close_value
+    except (requests.RequestException, ValueError, IndexError) as e:
+        print(f"[警告] 抓取美股指數 {symbol} 失敗: {e}")
+        return None
+
+
+def fetch_tw_indices(conn):
+    """14:30時段執行：抓加權指數、櫃買指數今天的收盤值，並確保歷史資料已回補"""
+    backfill_tw_index_if_needed(conn, "TAIEX", fetch_taiex_month)
+    backfill_tw_index_if_needed(conn, "TPEX", fetch_tpex_month)
+
+    this_month = datetime.date.today().strftime("%Y%m")
+    for code, fetch_fn in [("TAIEX", fetch_taiex_month), ("TPEX", fetch_tpex_month)]:
+        points = fetch_fn(this_month)
+        for date_str, close_value in points:
+            save_index_point(conn, code, date_str, close_value)
+        trim_index_history(conn, code, TW_INDEX_HISTORY_DAYS)
+    conn.commit()
+
+
+def fetch_us_indices_data(conn):
+    """07:30時段執行：抓美股三指數最新收盤值"""
+    for code, symbol, _name in US_INDICES:
+        result = fetch_us_index(symbol)
+        if result:
+            date_str, close_value = result
+            save_index_point(conn, code, date_str, close_value)
+            trim_index_history(conn, code, 2)  # 只需要留最新兩筆算漲跌
     conn.commit()
 
 
@@ -402,6 +602,74 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     color: var(--muted);
     font-size: 14px;
   }}
+  .chart-grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }}
+  .chart-card {{
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+  }}
+  .chart-card h3 {{
+    font-size: 14px;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }}
+  .sparkline {{
+    width: 100%;
+    height: auto;
+    display: block;
+  }}
+  .sparkline .axis-label {{
+    font-size: 9px;
+    fill: var(--muted);
+    font-family: 'Noto Sans TC', sans-serif;
+  }}
+  .value-grid {{
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+  }}
+  .value-card {{
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 8px;
+    text-align: center;
+  }}
+  .value-card h4 {{
+    font-size: 12px;
+    margin: 0 0 6px;
+    color: var(--muted);
+    font-weight: 500;
+  }}
+  .value-number {{
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+  }}
+  .value-change {{
+    font-size: 12px;
+    margin: 4px 0 0;
+    font-weight: 600;
+  }}
+  .value-date {{
+    font-size: 10px;
+    color: var(--muted);
+    margin: 4px 0 0;
+  }}
+  @media (max-width: 640px) {{
+    .chart-grid {{
+      grid-template-columns: 1fr;
+    }}
+    .value-grid {{
+      grid-template-columns: repeat(2, 1fr);
+    }}
+  }}
   .site-footer {{
     text-align: center;
     margin-top: 32px;
@@ -462,6 +730,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <p>總經 · 台股與國際股市 · 國內ETF　最後產生時間：{build_time}（台灣時間）</p>
   </header>
 
+  {index_section}
+
   {macro_section}
 
   <section class="card">
@@ -495,7 +765,144 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
+def get_index_series(conn, index_code, limit=TW_INDEX_HISTORY_DAYS):
+    rows = conn.execute(
+        """SELECT date, close_value FROM index_history
+           WHERE index_code = ? ORDER BY date ASC LIMIT ?""",
+        (index_code, limit),
+    ).fetchall()
+    return rows
+
+
+def get_latest_change(conn, index_code):
+    """回傳 (最新收盤值, 漲跌點, 漲跌幅%, 最新日期) 或全部None（沒有資料時）"""
+    rows = conn.execute(
+        """SELECT date, close_value FROM index_history
+           WHERE index_code = ? ORDER BY date DESC LIMIT 2""",
+        (index_code,),
+    ).fetchall()
+    if not rows:
+        return None, None, None, None
+    latest_date, latest_close = rows[0]
+    if len(rows) < 2:
+        return latest_close, None, None, latest_date
+    _, prev_close = rows[1]
+    change_value = latest_close - prev_close
+    change_pct = (change_value / prev_close * 100) if prev_close else None
+    return latest_close, change_value, change_pct, latest_date
+
+
+def render_sparkline_svg(dates, values, width=300, height=90):
+    """畫一條極簡折線圖，並在下緣標示月份作為時間軸參考。
+    不畫Y軸數值刻度，維持精簡、避免資訊壓迫感。"""
+    if len(values) < 2:
+        return '<p class="empty-state">資料不足，尚無法繪製走勢圖</p>'
+
+    label_area = 18  # 下方留給月份文字的高度
+    chart_height = height - label_area
+    min_v, max_v = min(values), max(values)
+    range_v = (max_v - min_v) or 1
+    padding = 6
+    usable_w = width - padding * 2
+    usable_h = chart_height - padding * 2
+
+    def x_at(i):
+        return padding + (i / (len(values) - 1)) * usable_w
+
+    line_color = "#B23A2E"
+
+    points = []
+    for i, v in enumerate(values):
+        x = x_at(i)
+        y = padding + usable_h - ((v - min_v) / range_v) * usable_h
+        points.append(f"{x:.1f},{y:.1f}")
+    polyline_points = " ".join(points)
+
+    # 找出每個月第一次出現的位置，標上月份文字（例如「9月」）
+    month_labels = []
+    last_month = None
+    for i, d in enumerate(dates):
+        month = d[5:7]  # 從 YYYY-MM-DD 取出月份
+        if month != last_month:
+            month_labels.append((x_at(i), int(month)))
+            last_month = month
+
+    labels_svg = "".join(
+        f'<text x="{x:.1f}" y="{height - 4}" text-anchor="middle" class="axis-label">{m}月</text>'
+        for x, m in month_labels
+    )
+
+    return f"""<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" class="sparkline">
+        <polyline points="{polyline_points}" fill="none" stroke="{line_color}" stroke-width="2"
+                  stroke-linejoin="round" stroke-linecap="round"/>
+        {labels_svg}
+    </svg>"""
+
+
+def render_sparkline_card(conn, index_code):
+    name = INDEX_DISPLAY_NAMES.get(index_code, index_code)
+    series = get_index_series(conn, index_code)
+    if not series:
+        return f"""<div class="chart-card">
+            <h3>{name}</h3>
+            <p class="empty-state">暫無資料</p>
+        </div>"""
+
+    dates = [r[0] for r in series]
+    values = [r[1] for r in series]
+    svg = render_sparkline_svg(dates, values)
+    return f"""<div class="chart-card">
+        <h3>{name}</h3>
+        {svg}
+    </div>"""
+
+
+def render_value_card(conn, index_code):
+    name = INDEX_DISPLAY_NAMES.get(index_code, index_code)
+    latest, change_value, change_pct, latest_date = get_latest_change(conn, index_code)
+
+    if latest is None:
+        return f"""<div class="value-card">
+            <h4>{name}</h4>
+            <p class="empty-state">暫無資料</p>
+        </div>"""
+
+    if change_value is None:
+        change_html = '<p class="value-change">－</p>'
+    else:
+        # 紅漲綠跌（台灣習慣）
+        color = "#B23A2E" if change_value >= 0 else "#1E7A4C"
+        arrow = "▲" if change_value >= 0 else "▼"
+        change_html = f"""<p class="value-change" style="color:{color};">
+            {arrow} {abs(change_value):,.2f}（{abs(change_pct):.2f}%）
+        </p>"""
+
+    return f"""<div class="value-card">
+        <h4>{name}</h4>
+        <p class="value-number">{latest:,.2f}</p>
+        {change_html}
+        <p class="value-date">{escape(latest_date)}</p>
+    </div>"""
+
+
+def render_index_section(conn):
+    chart_cards = render_sparkline_card(conn, "TAIEX") + render_sparkline_card(conn, "TPEX")
+    value_cards = "".join(
+        render_value_card(conn, code) for code in ["TAIEX", "TPEX", "SOX", "SPX", "IXIC"]
+    )
+    return f"""
+    <section class="card">
+        <div class="section-head">
+            <h2>大盤指數</h2>
+        </div>
+        <div class="chart-grid">{chart_cards}</div>
+        <div class="value-grid">{value_cards}</div>
+    </section>"""
+
+
 def build_html(conn):
+    index_section = render_index_section(conn)
+
     macro_rows = get_recent_articles(conn, "macro")
     macro_section = render_macro_section(macro_rows)
 
@@ -508,6 +915,7 @@ def build_html(conn):
 
     html = HTML_TEMPLATE.format(
         build_time=build_time,
+        index_section=index_section,
         macro_section=macro_section,
         taiwan_stock_list=taiwan_stock_list,
         intl_stock_list=intl_stock_list,
@@ -524,12 +932,26 @@ def build_html(conn):
 # ============================================================
 
 def main():
+    time_slot = os.environ.get("TIME_SLOT", "manual")
     conn = init_db()
 
-    print("步驟 1/2：抓取 RSS 新聞...")
+    print(f"目前時段: {time_slot}")
+    print("步驟 1/3：抓取 RSS 新聞...")
     fetch_all_sources(conn)
 
-    print("步驟 2/2：產生網頁...")
+    print("步驟 2/3：抓取指數資料...")
+    if time_slot in ("14:30", "manual"):
+        try:
+            fetch_tw_indices(conn)
+        except Exception as e:
+            print(f"[警告] 台股指數抓取過程發生例外，已略過本次: {e}")
+    if time_slot in ("07:30", "manual"):
+        try:
+            fetch_us_indices_data(conn)
+        except Exception as e:
+            print(f"[警告] 美股指數抓取過程發生例外，已略過本次: {e}")
+
+    print("步驟 3/3：產生網頁...")
     build_html(conn)
 
     conn.close()
