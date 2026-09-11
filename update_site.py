@@ -261,10 +261,12 @@ def fetch_all_sources(conn):
 # ============================================================
 
 def save_index_point(conn, index_code, date_str, close_value):
-    """存一筆指數收盤值，同一天重複存入會被忽略（不會產生重複資料）"""
+    """存一筆指數收盤值。同一天重複存入會直接覆蓋舊值——
+    這是刻意設計，讓修正後的抓取邏輯能夠覆蓋掉先前可能寫入的錯誤資料，
+    也讓證交所/櫃買中心如果事後修正數字時，我們也能跟著更新。"""
     try:
         conn.execute(
-            """INSERT OR IGNORE INTO index_history (index_code, date, close_value, fetched_at)
+            """INSERT OR REPLACE INTO index_history (index_code, date, close_value, fetched_at)
                VALUES (?, ?, ?, ?)""",
             (index_code, date_str, close_value, datetime.datetime.now().isoformat()),
         )
@@ -345,7 +347,7 @@ def fetch_tpex_month(year_month):
             continue
 
         close_value = None
-        for col_idx in range(1, min(len(row), 6)):
+        for col_idx in range(1, min(len(row), 9)):
             try:
                 candidate = float(str(row[col_idx]).replace(",", ""))
             except (ValueError, TypeError):
@@ -399,23 +401,27 @@ def backfill_tw_index_if_needed(conn, index_code, fetch_month_fn):
 
 
 def fetch_us_index(symbol):
-    """透過yfinance抓最新收盤值，回傳 (date, close) 或 None。
+    """透過yfinance抓最近兩個交易日的收盤值，回傳 [(date, close), ...]（最多2筆）。
+    一次抓兩天是為了讓「第一次成功抓取」當下就能算出漲跌，不用等到隔天。
     yfinance是社群維護的成熟套件，內建處理了Yahoo Finance的存取限制，
-    比直接發request穩定。若失敗會安全地回傳None，畫面上會沿用資料庫裡
+    比直接發request穩定。若失敗會安全地回傳空清單，畫面上會沿用資料庫裡
     最後一次成功抓到的數值並標示日期。"""
     try:
         import yfinance as yf
         ticker = yf.Ticker(symbol)
         hist = ticker.history(period="5d")
         if hist.empty:
-            return None
-        last_row = hist.iloc[-1]
-        date_str = hist.index[-1].strftime("%Y-%m-%d")
-        close_value = float(last_row["Close"])
-        return date_str, close_value
+            return []
+        recent = hist.tail(2)
+        results = []
+        for idx, row in recent.iterrows():
+            date_str = idx.strftime("%Y-%m-%d")
+            close_value = float(row["Close"])
+            results.append((date_str, close_value))
+        return results
     except Exception as e:
         print(f"[警告] 抓取美股指數 {symbol} 失敗: {e}")
-        return None
+        return []
 
 
 def fetch_tw_indices(conn):
@@ -433,12 +439,12 @@ def fetch_tw_indices(conn):
 
 
 def fetch_us_indices_data(conn):
-    """07:30時段執行：抓美股三指數最新收盤值"""
+    """07:30時段執行：抓美股三指數最近兩個交易日的收盤值"""
     for code, symbol, _name in US_INDICES:
-        result = fetch_us_index(symbol)
-        if result:
-            date_str, close_value = result
+        points = fetch_us_index(symbol)
+        for date_str, close_value in points:
             save_index_point(conn, code, date_str, close_value)
+        if points:
             trim_index_history(conn, code, 2)  # 只需要留最新兩筆算漲跌
     conn.commit()
 
