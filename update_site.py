@@ -424,18 +424,31 @@ def fetch_us_indices_data(conn):
 def fetch_sector_heatmap(conn):
     """14:30時段執行：抓產業類股當日漲跌幅。
     已實際連線驗證過此端點格式正確，欄位為清楚的中文名稱，
-    不需要像之前那樣用範圍檢測猜欄位。"""
+    不需要像之前那樣用範圍檢測猜欄位。
+    注意：日期一律採用API回傳資料本身附帶的「日期」欄位（民國年格式），
+    不可用程式執行當下的系統日期，避免收盤前執行時被誤標成當天。"""
     data = fetch_json_with_retry(SECTOR_INDEX_URL)
     if not data:
         print("[警告] 產業類股熱力圖資料抓取失敗，本次跳過")
         return
 
-    today = datetime.date.today().isoformat()
     count = 0
+    data_date = None
     for item in data:
         name = item.get("指數", "")
         if not name.endswith("類指數") or name in EXCLUDED_SECTOR_NAMES:
             continue
+
+        # 解析資料本身的日期欄位（民國年格式，例如 "1150910" → 2026-09-10）
+        roc_date_str = item.get("日期", "")
+        try:
+            roc_year = int(roc_date_str[:3])
+            month = int(roc_date_str[3:5])
+            day = int(roc_date_str[5:7])
+            data_date = f"{roc_year + 1911}-{month:02d}-{day:02d}"
+        except (ValueError, IndexError):
+            continue
+
         try:
             pct_str = item.get("漲跌百分比", "").replace(",", "")
             sign = -1 if item.get("漲跌") == "-" else 1
@@ -448,14 +461,14 @@ def fetch_sector_heatmap(conn):
                 """INSERT OR REPLACE INTO sector_heatmap
                    (sector_name, pct_change, date, fetched_at)
                    VALUES (?, ?, ?, ?)""",
-                (name, pct, today, datetime.datetime.now().isoformat()),
+                (name, pct, data_date, datetime.datetime.now().isoformat()),
             )
             count += 1
         except sqlite3.Error as e:
             print(f"[警告] 存入產業熱力圖資料失敗: {e}")
 
     conn.commit()
-    print(f"[資訊] 產業類股熱力圖抓取到 {count} 個分類")
+    print(f"[資訊] 產業類股熱力圖抓取到 {count} 個分類，資料日期：{data_date}")
 
 
 # ============================================================
