@@ -78,13 +78,20 @@ TPEX_URL = "https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_index/s
 TW_INDEX_HISTORY_DAYS = 130      # 台股指數保留的交易日數量（約半年）
 TW_INDEX_BACKFILL_MONTHS = 6     # 第一次執行時，回補過去幾個月的歷史
 
-# 美股三指數：非官方來源（Stooq），只保留最新兩筆用來算漲跌
-STOOQ_URL = "https://stooq.com/q/d/l/?s={symbol}&i=d"
+# 美股三指數：透過 yfinance 套件抓取（比直接呼叫Stooq/Yahoo API更穩定，
+# 該套件內建處理了Yahoo Finance的驗證機制），只保留最新兩筆用來算漲跌
 US_INDICES = [
-    ("SOX", "^sox", "費城半導體"),
-    ("SPX", "^spx", "S&P500"),
-    ("IXIC", "^ndq", "那斯達克"),
+    ("SOX", "^SOX", "費城半導體"),
+    ("SPX", "^GSPC", "S&P500"),
+    ("IXIC", "^IXIC", "那斯達克"),
 ]
+
+# 台股指數的合理數值範圍（防呆用：如果抓到的數字超出這個範圍，
+# 代表欄位判讀錯誤，會直接捨棄，不讓錯誤資料混入資料庫）
+INDEX_SANITY_RANGE = {
+    "TAIEX": (10000, 150000),
+    "TPEX": (50, 2000),
+}
 INDEX_DISPLAY_NAMES = {
     "TAIEX": "加權指數",
     "TPEX": "櫃買指數",
@@ -298,16 +305,28 @@ def fetch_taiex_month(year_month):
             y, m, d = roc_date.split("/")
             date_str = f"{int(y) + 1911}-{int(m):02d}-{int(d):02d}"
             close_value = float(row[4].replace(",", ""))
-            results.append((date_str, close_value))
+            if is_plausible_index_value("TAIEX", close_value):
+                results.append((date_str, close_value))
+            else:
+                print(f"[警告] 加權指數 {date_str} 數值 {close_value} 超出合理範圍，該筆跳過")
         except (ValueError, IndexError, AttributeError):
             continue
     return results
 
 
+def is_plausible_index_value(index_code, value):
+    """防呆檢查：數值是否落在合理範圍內，避免欄位判讀錯誤污染資料庫"""
+    bounds = INDEX_SANITY_RANGE.get(index_code)
+    if not bounds:
+        return True
+    return bounds[0] <= value <= bounds[1]
+
+
 def fetch_tpex_month(year_month):
     """抓櫃買指數，year_month 格式 YYYYMM，回傳 [(date, close), ...]
-    注意：此端點路徑未經100%實測驗證，若格式有誤會安全地回傳空清單，
-    不影響其他區塊正常運作。"""
+    注意：官方回傳的欄位順序未完全確認，因此對每一列嘗試多個可能的欄位位置，
+    取第一個「數值落在合理範圍內」的當作收盤指數，並排除掉不合理的極端值
+    （例如誤把成交金額當成指數），降低欄位判讀錯誤的風險。"""
     year = int(year_month[:4])
     month = int(year_month[4:6])
     roc_date = f"{year - 1911}/{month:02d}"
@@ -322,10 +341,23 @@ def fetch_tpex_month(year_month):
             roc_date_str = row[0].replace(",", "")
             y, m, d = roc_date_str.split("/")
             date_str = f"{int(y) + 1911}-{int(m):02d}-{int(d):02d}"
-            close_value = float(str(row[1]).replace(",", ""))
-            results.append((date_str, close_value))
         except (ValueError, IndexError, AttributeError):
             continue
+
+        close_value = None
+        for col_idx in range(1, min(len(row), 6)):
+            try:
+                candidate = float(str(row[col_idx]).replace(",", ""))
+            except (ValueError, TypeError):
+                continue
+            if is_plausible_index_value("TPEX", candidate):
+                close_value = candidate
+                break
+
+        if close_value is not None:
+            results.append((date_str, close_value))
+        else:
+            print(f"[警告] 櫃買指數 {date_str} 找不到合理範圍內的欄位，該筆跳過")
     return results
 
 
@@ -367,25 +399,21 @@ def backfill_tw_index_if_needed(conn, index_code, fetch_month_fn):
 
 
 def fetch_us_index(symbol):
-    """從Stooq抓最新收盤值，回傳 (date, close) 或 None。
-    注意：此為非官方資料來源，若未來失效，會安全地回傳None，
-    畫面上會沿用資料庫裡最後一次成功抓到的數值並標示日期。"""
-    url = STOOQ_URL.format(symbol=symbol)
-    headers = {"User-Agent": USER_AGENT}
+    """透過yfinance抓最新收盤值，回傳 (date, close) 或 None。
+    yfinance是社群維護的成熟套件，內建處理了Yahoo Finance的存取限制，
+    比直接發request穩定。若失敗會安全地回傳None，畫面上會沿用資料庫裡
+    最後一次成功抓到的數值並標示日期。"""
     try:
-        time.sleep(random.uniform(1, 3))
-        resp = requests.get(url, headers=headers, timeout=15)
-        if resp.status_code != 200:
+        import yfinance as yf
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period="5d")
+        if hist.empty:
             return None
-        lines = resp.text.strip().split("\n")
-        if len(lines) < 2:
-            return None
-        last_line = lines[-1].split(",")
-        # 欄位：Date,Open,High,Low,Close,Volume
-        date_str = last_line[0]
-        close_value = float(last_line[4])
+        last_row = hist.iloc[-1]
+        date_str = hist.index[-1].strftime("%Y-%m-%d")
+        close_value = float(last_row["Close"])
         return date_str, close_value
-    except (requests.RequestException, ValueError, IndexError) as e:
+    except Exception as e:
         print(f"[警告] 抓取美股指數 {symbol} 失敗: {e}")
         return None
 
