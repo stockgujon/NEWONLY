@@ -176,12 +176,55 @@
     color: var(--muted);
     margin: 4px 0 0;
   }
+  .heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .heat-block {
+    border-radius: 4px;
+    padding: 10px 8px;
+    text-align: center;
+    min-height: 64px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .heat-name {
+    font-size: 12px;
+    font-weight: 500;
+    margin: 0 0 4px;
+    line-height: 1.3;
+  }
+  .heat-pct {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 16px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .legend-bar {
+    width: 160px;
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right, #1E7A4C, #F7F6F2, #B23A2E);
+  }
   @media (max-width: 640px) {
     .chart-grid {
       grid-template-columns: 1fr;
     }
     .value-grid {
       grid-template-columns: repeat(2, 1fr);
+    }
+    .heatmap-grid {
+      grid-template-columns: repeat(3, 1fr);
     }
   }
   .site-footer {
@@ -241,7 +284,7 @@
       </svg>
       台灣財經儀表板
     </h1>
-    <p>總經 · 台股與國際股市 · 國內ETF　最後產生時間：2026-09-11 12:42（台灣時間）</p>
+    <p>總經 · 台股與國際股市 · 國內ETF　最後產生時間：2026-09-11 12:52（台灣時間）</p>
   </header>
 
   
@@ -286,6 +329,12 @@
         </p>
         <p class="value-date">2026-09-10</p>
     </div></div>
+    </section>
+
+  
+    <section class="card">
+        <div class="section-head"><h2>產業類股熱力圖</h2></div>
+        <p class="empty-state">目前沒有資料，稍後會自動更新。</p>
     </section>
 
   
