@@ -399,7 +399,9 @@ def fetch_us_index(symbol):
 
 
 def fetch_tw_indices(conn):
-    """14:30時段執行：抓加權指數今天的收盤值，並確保歷史資料已回補"""
+    """21:00時段執行：抓加權指數今天的收盤值，並確保歷史資料已回補。
+    改成21:00而非收盤後的14:30，是因為實測發現證交所資料更新常有延遲，
+    14:30當下常常還抓不到當天的資料，21:00較能確保資料已經備妥。"""
     backfill_tw_index_if_needed(conn, "TAIEX", fetch_taiex_month)
 
     this_month = datetime.date.today().strftime("%Y%m")
@@ -422,7 +424,8 @@ def fetch_us_indices_data(conn):
 
 
 def fetch_sector_heatmap(conn):
-    """14:30時段執行：抓產業類股當日漲跌幅。
+    """21:00時段執行：抓產業類股當日漲跌幅（原訂14:30，因證交所資料常延遲更新，
+    改到21:00較能確保抓到當天的資料）。
     已實際連線驗證過此端點格式正確，欄位為清楚的中文名稱，
     不需要像之前那樣用範圍檢測猜欄位。
     注意：日期一律採用API回傳資料本身附帶的「日期」欄位（民國年格式），
@@ -1098,7 +1101,7 @@ def main():
     fetch_all_sources(conn)
 
     print("步驟 2/3：抓取指數資料...")
-    if time_slot in ("14:30", "manual"):
+    if time_slot in ("21:00", "manual"):
         try:
             fetch_tw_indices(conn)
         except Exception as e:
