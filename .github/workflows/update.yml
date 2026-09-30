@@ -3,10 +3,13 @@ name: 更新財經儀表板
 on:
   schedule:
     # 以下時間為 UTC，已換算對應台灣時間（UTC+8）
-    - cron: "30 23 * * *"   # 台灣時間 07:30
-    - cron: "30 4 * * *"    # 台灣時間 12:30
-    - cron: "30 6 * * *"    # 台灣時間 14:30
-    - cron: "0 13 * * *"    # 台灣時間 21:00
+    - cron: "30 23 * * *"   # 台灣時間 07:30（新聞＋美股三指數＋產業熱力圖）
+    - cron: "30 2 * * *"    # 台灣時間 10:30（新聞）
+    - cron: "30 4 * * *"    # 台灣時間 12:30（新聞）
+    - cron: "30 6 * * *"    # 台灣時間 14:30（新聞）
+    - cron: "30 8 * * *"    # 台灣時間 16:30（新聞）
+    - cron: "0 13 * * *"    # 台灣時間 21:00（新聞＋加權指數）
+    - cron: "30 18 * * *"   # 台灣時間 02:30（新聞）
   workflow_dispatch: {}      # 允許手動點擊執行，方便測試
 
 permissions:
@@ -35,9 +38,12 @@ jobs:
           else
             HOUR_UTC=$(date -u +%H)
             if [ "$HOUR_UTC" == "23" ]; then echo "slot=07:30" >> $GITHUB_OUTPUT
+            elif [ "$HOUR_UTC" == "02" ]; then echo "slot=10:30" >> $GITHUB_OUTPUT
             elif [ "$HOUR_UTC" == "04" ]; then echo "slot=12:30" >> $GITHUB_OUTPUT
             elif [ "$HOUR_UTC" == "06" ]; then echo "slot=14:30" >> $GITHUB_OUTPUT
+            elif [ "$HOUR_UTC" == "08" ]; then echo "slot=16:30" >> $GITHUB_OUTPUT
             elif [ "$HOUR_UTC" == "13" ]; then echo "slot=21:00" >> $GITHUB_OUTPUT
+            elif [ "$HOUR_UTC" == "18" ]; then echo "slot=02:30" >> $GITHUB_OUTPUT
             else echo "slot=manual" >> $GITHUB_OUTPUT
             fi
           fi
