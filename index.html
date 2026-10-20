@@ -216,7 +216,99 @@
     border-radius: 5px;
     background: linear-gradient(to right, #1E7A4C, #F7F6F2, #B23A2E);
   }
+  .ind-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .ind-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .ind-card.ind-wide {
+    grid-column: 1 / -1;
+  }
+  .ind-card h4 {
+    font-size: 12px;
+    margin: 0 0 6px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .ind-main {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .ind-unit {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .ind-slash {
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .ind-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin: 6px 0 0;
+    line-height: 1.6;
+  }
+  .ind-est {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 4px;
+    font-size: 10px;
+    border: 1px solid var(--muted);
+    border-radius: 3px;
+    color: var(--muted);
+  }
+  .ind-foot {
+    font-size: 11px;
+    color: var(--muted);
+    margin: 14px 0 0;
+    line-height: 1.7;
+  }
+  .inst-list {
+    max-width: 420px;
+    margin: 4px auto 0;
+  }
+  .inst-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .inst-row:last-child {
+    border-bottom: none;
+  }
+  .inst-name {
+    width: 56px;
+    text-align: left;
+  }
+  .inst-amount {
+    flex: 1;
+    text-align: right;
+    padding-right: 12px;
+  }
+  .ind-streak {
+    min-width: 52px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--muted);
+    border-radius: 10px;
+    padding: 1px 8px;
+    text-align: center;
+  }
   @media (max-width: 640px) {
+    .ind-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
     .chart-grid {
       grid-template-columns: 1fr;
     }
@@ -284,7 +376,7 @@
       </svg>
       台灣財經儀表板
     </h1>
-    <p>總經 · 台股與國際股市 · 國內ETF　最後產生時間：2026-10-20 15:50（台灣時間）</p>
+    <p>總經 · 台股與國際股市 · 國內ETF　最後產生時間：2026-10-20 17:29（台灣時間）</p>
   </header>
 
   
@@ -329,6 +421,62 @@
         </p>
         <p class="value-date">2026-10-19</p>
     </div></div>
+    </section>
+
+  
+    <section class="card">
+        <div class="section-head">
+            <h2>大盤指標</h2>
+        </div>
+        <div class="ind-grid"><div class="ind-card">
+        <h4>上漲／下跌家數</h4>
+        <p class="ind-main"><span style="color:#B23A2E;">269</span> <span class="ind-slash">/</span> <span style="color:#1E7A4C;">701</span></p>
+        <p class="ind-sub">漲停 8・跌停 0・持平 104</p>
+        <p class="value-date">2026-10-20</p>
+    </div><div class="ind-card">
+        <h4>成交金額</h4>
+        <p class="ind-main">7,987 <span class="ind-unit">億元</span></p>
+        <p class="ind-sub">較前日 <span style="color:#1E7A4C;">▼ 680.2億（7.8%）</span><br>近5日均 10,146 億</p>
+        <p class="value-date">2026-10-20</p>
+    </div><div class="ind-card">
+        <h4>融資餘額</h4>
+        <p class="ind-main">6,406 <span class="ind-unit">億元</span></p>
+        <p class="ind-sub">較前日 <span style="color:#1E7A4C;">▼ 49.8億（0.8%）</span><br>9,592,714 張</p>
+        <p class="value-date">2026-10-19</p>
+    </div><div class="ind-card">
+        <h4>融資維持率<span class="ind-est">估算</span></h4>
+        <p class="ind-main">181.3<span class="ind-unit">%</span></p>
+        
+        <p class="value-date">2026-10-19</p>
+    </div><div class="ind-card">
+        <h4>大盤本益比<span class="ind-est">估算</span></h4>
+        <p class="ind-main">24.4<span class="ind-unit"> 倍</span></p>
+        <p class="ind-sub">市值加權，不含虧損公司</p>
+        <p class="value-date">2026-10-20</p>
+    </div><div class="ind-card">
+        <h4>與季線乖離</h4>
+        <p class="ind-main"><span style="color:#B23A2E;">+0.39<span class="ind-unit">%</span></span></p>
+        <p class="ind-sub">正乖離・收盤 46,293 / 季線 46,113</p>
+        <p class="value-date">2026-10-20</p>
+    </div><div class="ind-card ind-wide">
+        <h4>三大法人買賣超</h4>
+        <div class="inst-list"><div class="inst-row">
+            <span class="inst-name">外資</span>
+            <span class="inst-amount"><span style="color:#1E7A4C;font-weight:700;">-795.4 億</span></span>
+            <span class="ind-streak" style="color:#1E7A4C;border-color:#1E7A4C;">連10賣</span>
+        </div><div class="inst-row">
+            <span class="inst-name">投信</span>
+            <span class="inst-amount"><span style="color:#B23A2E;font-weight:700;">+183.2 億</span></span>
+            <span class="ind-streak" style="color:#B23A2E;border-color:#B23A2E;">連8買</span>
+        </div><div class="inst-row">
+            <span class="inst-name">自營商</span>
+            <span class="inst-amount"><span style="color:#1E7A4C;font-weight:700;">-355.8 億</span></span>
+            <span class="ind-streak" style="color:#1E7A4C;border-color:#1E7A4C;">連9賣</span>
+        </div></div>
+        <p class="ind-sub">買賣超金額；連買／連賣依資料庫累積的交易日計算</p>
+        <p class="value-date">2026-10-20</p>
+    </div></div>
+        <p class="ind-foot">資料來源：臺灣證券交易所公開資料。各項指標各自更新，尚未公布時沿用最近一筆並標示資料日期；標示「估算」者為依公開資料自行推算，數字可能與其他網站略有差異。</p>
     </section>
 
   
@@ -484,6 +632,11 @@
         </div>
         <ul class="news-list">
         <li class="news-item">
+            <a href="https://money.udn.com/money/story/5599/9826575" target="_blank" rel="noopener">亞伯達省公投決定留在加拿大　關鍵時刻卡尼保住國家團結</a>
+            <p class="news-desc">加拿大西部亞伯達省居民就是否該脫離加拿大舉行公投，結果「留加派」勝出。總理卡尼正試圖在與美國持續進行的貿易戰中團結國家，...</p>
+            <span class="news-meta">經濟日報 · Tue, 20 Oct 2026 16:30:46 +0800</span>
+        </li>
+        <li class="news-item">
             <a href="https://money.udn.com/money/story/5599/9826430" target="_blank" rel="noopener">印度外長將會盧比歐　料談能源貿易與科技合作</a>
             <p class="news-desc">印度外交部長蘇杰生（Subrahmanyam Jaishankar）今天將於孟買與美國國務卿盧比歐（Marco Rubi...</p>
             <span class="news-meta">經濟日報 · Tue, 20 Oct 2026 15:31:14 +0800</span>
@@ -527,36 +680,6 @@
             <a href="https://money.udn.com/money/story/123398/9823131" target="_blank" rel="noopener">人工智慧主題交易退潮 數據中心建設商 Nscale 的 IPO 估值目標遭質疑</a>
             <p class="news-desc">【彭博】-- 知情人士稱，在人工智慧(AI)相關企業接連遭遇市場挫折之際，Nscale尋求的IPO估值目標正遭到部分投資者反對。這家獲得輝達投資的數據中心建設商據悉尋求約300億美元的IPO估值。</p>
             <span class="news-meta">經濟日報 · Mon, 19 Oct 2026 20:06:52 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5599/9823914" target="_blank" rel="noopener">鴻海攜三菱電機拚兆日圓營收 關潤盼合資公司獨立上市</a>
-            <p class="news-desc">鴻海和三菱電機合資事業將力拚2030會計年度營收達1兆日圓。鴻海電動車策略長關潤周一在東京記者會上說，若合作順利，希望合資公司未來能獨立上市，雙方各持股五成的安排，也可能隨事業發展調整。</p>
-            <span class="news-meta">經濟日報 · Mon, 19 Oct 2026 13:38:23 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5599/9823589" target="_blank" rel="noopener">新台幣貶破32.5元表現亞洲最弱 但外銀為何看好年底反攻31.5元？</a>
-            <p class="news-desc">AI投資疑慮引發外資連日賣超台股，新台幣兌美元周一一度貶至32.550元，創2025年4月以來最低，表現落後所有亞洲貨幣。不過，彭博引述分析師指出，台灣經濟和出口強勁，仍有助匯率回升，華僑銀行和ING預估年底前可升至31.60元和31.50元，升幅約3%。</p>
-            <span class="news-meta">經濟日報 · Mon, 19 Oct 2026 11:31:26 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5599/9823144" target="_blank" rel="noopener">鎧俠自高點慘跌64% 後續還有斷頭大跌壓力？融資餘額高達9,200億日圓</a>
-            <p class="news-desc">日本記憶體大廠鎧俠（Kioxia）股價面臨進一步下跌的壓力，原因是市場累積大量融資買進部位，押注股價上漲，但如今股價大跌，部分投資人可能被迫停損賣出。</p>
-            <span class="news-meta">經濟日報 · Mon, 19 Oct 2026 09:09:29 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5599/9823058" target="_blank" rel="noopener">星鏈、情報到豁免制裁俄羅斯　澤倫斯基與美財長隔空交鋒</a>
-            <p class="news-desc">烏克蘭總統澤倫斯基今天在美國新聞節目指出，希望美國總統川普改變對俄羅斯的政策決定，這是錯誤的。出席節目的美國財政部長貝森...</p>
-            <span class="news-meta">經濟日報 · Mon, 19 Oct 2026 08:00:40 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5599/9822790" target="_blank" rel="noopener">FT 訪調 學者看好 AI 帶動經濟成長</a>
-            <p class="news-desc">英國金融時報（FT）訪調的多數經濟學家預估，人工智慧（AI）未來十年將帶動全球經濟成長，且不會引發大規模失業。這項樂觀評估，與先前各界憂心AI將帶給社會深遠風險的警告，形成鮮明對比。</p>
-            <span class="news-meta">經濟日報 · Mon, 19 Oct 2026 02:29:02 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5599/9822809" target="_blank" rel="noopener">賓士發表 AMG 純電休旅</a>
-            <p class="news-desc">賓士17日正式發表AMG GT SUV，為首款由旗下高性能品牌AMG全新自主研發的全尺寸電動休旅車，寄望以強悍性能在競爭激烈的豪華車市殺出重圍，直接挑戰保時捷去年11月發表的純電版Cayenne。AMG GT SUV的入門款車型預定20日開放訂購，建議售價為11萬3,050歐元（12萬7,060美元），兩款頂規車型則預定明年春季上市。</p>
-            <span class="news-meta">經濟日報 · Mon, 19 Oct 2026 01:41:25 +0800</span>
         </li></ul>
     </section>
 
@@ -566,6 +689,41 @@
     </div>
     <h3 style="font-size:14px;color:var(--muted);margin:0 0 8px;">台股</h3>
     <ul class="news-list">
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/afe/202610200205.aspx" target="_blank" rel="noopener">新台幣重貶1.72角　收32.617元</a>
+            <p class="news-desc">（中央社台北20日電）台北外匯市場新台幣兌美元今天收盤收32.617元，重貶1.72角，成交金額32.77億美元。</p>
+            <span class="news-meta">中央社 · Tue, 20 Oct 2026 16:05:46 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/ahel/202610200202.aspx" target="_blank" rel="noopener">發票千萬獎險遭澎湖張男冒領　財部：實際中獎人已現身</a>
+            <p class="news-desc">（中央社記者呂晏慈台北20日電）財政部賦稅署今天表示，澎湖縣張姓男子涉嫌於近日持2張新台幣1000萬元中獎發票至銀行兌領獎金，行員察覺他持多張中獎發票且神色不寧，立即通報管制並報請警察機關協助調查，後經國稅局調查，其中1張發票已有實際中獎人出示憑據領獎，顯見張男確有冒詐領情形，全案已由檢警偵辦中。</p>
+            <span class="news-meta">中央社 · Tue, 20 Oct 2026 16:00:40 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/afe/202610200195.aspx" target="_blank" rel="noopener">壽險業前9月新契約保費達1.17兆　投資型保單年增128%</a>
+            <p class="news-desc">（中央社記者蘇思云台北20日電）壽險公會統計顯示，壽險業2026年前9月新契約保費收入達新台幣1兆1723億5800萬元，年增近59%。壽險公會表示，近期市場震盪且美國聯準會9月升息，不過，壽險公司持續與銀行與投信通路合作，帶動投資型保單前9月新契約近6764億元，年增128.7%。</p>
+            <span class="news-meta">中央社 · Tue, 20 Oct 2026 15:45:25 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/afe/202610200191.aspx" target="_blank" rel="noopener">美光10/22與台中廠工會調解　桃園廠工會罷工聲援</a>
+            <p class="news-desc">（中央社記者張建中新竹20日電）美光（Micron）與台中的台灣美光記憶體工會預計10月22日舉行第2次調解會議，已取得罷工權的台灣美光晶圓工會（桃園工會）決定當天進行聲援式罷工，以實際行動支持台中廠工會，並呼籲美光公司提出具體分潤制方案。</p>
+            <span class="news-meta">中央社 · Tue, 20 Oct 2026 15:32:16 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/afe/202610200184.aspx" target="_blank" rel="noopener">新光三越天母店續留受關注　朝商圈共榮方向前進</a>
+            <p class="news-desc">（中央社記者何秀玲台北20日電）新光三越天母店租約將於明年第1季到期，續留動向受關注。新光三越主管表示，與房東已合作20多年，雙方有默契，希望朝「商圈共榮」方向前進；另外，輝達進駐北士科，目前外溢效益尚不明顯，不過未來可望帶來新客群，天母店將新增餐飲、體驗內容因應。</p>
+            <span class="news-meta">中央社 · Tue, 20 Oct 2026 15:15:01 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/afe/202610200179.aspx" target="_blank" rel="noopener">三大法人賣超台股968.04億元</a>
+            <p class="news-desc">（中央社台北20日電）台股今天跌529.15點，收在46292.93點，成交值新台幣7586.84億元。三大法人外資及陸資賣超、投信買超、自營商賣超，合計賣超968.04億元。</p>
+            <span class="news-meta">中央社 · Tue, 20 Oct 2026 15:04:50 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://www.cna.com.tw/news/afe/202610200172.aspx" target="_blank" rel="noopener">台股跌529點回測季線支撐　電子金融下挫</a>
+            <p class="news-desc">（中央社記者鍾榮峰台北20日電）台股今天在電子權值股、零組件族群跌勢明顯，以及金融股挫跌逾2%下，高低震盪達804點，午盤後賣壓加重，最低下探46163.03點，回測季線約46113點；台股終場下跌529.15點，收46292.93點，跌幅1.13%。</p>
+            <span class="news-meta">中央社 · Tue, 20 Oct 2026 14:46:35 +0800</span>
+        </li>
         <li class="news-item">
             <a href="https://www.cna.com.tw/news/afe/202610200165.aspx" target="_blank" rel="noopener">是方虎尾AI資料中心動土　預計117年下半年營運</a>
             <p class="news-desc">（中央社記者江明晏台北20日電）是方電訊中科虎尾AI資料中心今天動土，是方董事長邵泓嘉表示，本案總投資金額約新台幣33億元，預計民國117年下半年營運，未來將透過跨國AIDC戰略合作、國際海纜網路資源，點亮台灣西部AI算力新走廊。</p>
@@ -605,41 +763,6 @@
             <a href="https://www.cna.com.tw/news/afe/202610200128.aspx" target="_blank" rel="noopener">星宇迎密集交機潮　明年營收拚增4成油價添變數</a>
             <p class="news-desc">（中央社記者江明晏布拉格20日電）星宇航空迎接密集交機潮，公關長梁文龍表示，預計2026年底機隊將達42架、2027年底增至48架，除評估美國、歐洲新航點，也預計進軍大洋洲，看好增班拓點效益下，明年營收將年增逾4成，油價波動是營運最大變數。</p>
             <span class="news-meta">中央社 · Tue, 20 Oct 2026 12:58:58 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/afe/202610200121.aspx" target="_blank" rel="noopener">航空業瞄準AI供應鏈拓點增班　角逐半導體商機</a>
-            <p class="news-desc">（中央社記者江明晏布拉格20日電）台灣AI供應鏈加速全球布局，航空產業航線成為重要基礎建設。星宇航空（2646）表示，半導體產業鏈客貨流需求強勁，鳳凰城、布拉格、安大略已增班，並評估達拉斯、芝加哥等新航點，吉隆坡則放大機型、增班執飛，瞄準台廠東南亞投資需求。</p>
-            <span class="news-meta">中央社 · Tue, 20 Oct 2026 12:41:43 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/afe/202610200118.aspx" target="_blank" rel="noopener">TPCA展登場　東台秀AI伺服器板無人化鑽孔方案</a>
-            <p class="news-desc">（中央社記者鍾榮峰台北20日電）台灣電路板產業國際展覽會（2026 TPCA Show）今天登場，工具機廠東台聚焦人工智慧AI伺服器板與IC載板製造，展出CCD高精度鑽孔機與鑽孔站別無人化完整解決方案。</p>
-            <span class="news-meta">中央社 · Tue, 20 Oct 2026 12:30:36 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/afe/202610200109.aspx" target="_blank" rel="noopener">工研院攜群翊　搶進低軌衛星與HPC供應鏈</a>
-            <p class="news-desc">（中央社記者張建中新竹20日電）台灣電路板產業國際展覽會今天登場，工研院發表AI動態即時溫測校準系統，成功解決高反射板材熱像量測偏差的長期製程痛點。工研院表示，已攜手設備廠群翊列為整機標配，打入國際低軌衛星與高效能運算（HPC）先進載板產線。</p>
-            <span class="news-meta">中央社 · Tue, 20 Oct 2026 12:19:17 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/aopl/202610200106.aspx" target="_blank" rel="noopener">法國暴動致公債現拋售潮　財政難題雪上加霜</a>
-            <p class="news-desc">（中央社巴黎19日綜合外電報導）法國週末經歷近年最嚴重的暴動後，金融市場今迅速引爆恐慌，法國公債再度出現慘烈拋售。社會動盪、財政改革停滯與政局不穩三重夾擊凸顯歐元區第二大經濟體法國面臨的困境。</p>
-            <span class="news-meta">中央社 · Tue, 20 Oct 2026 12:13:11 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/afe/202610200103.aspx" target="_blank" rel="noopener">欣興簡山傑：AI算力爆發　載板從單兵作戰走向生態系合作</a>
-            <p class="news-desc">（中央社記者吳家豪台北20日電）IC載板暨印刷電路板（PCB）大廠欣興電子董事長簡山傑今天表示，AI算力正迎來爆發期，顛覆傳統摩爾定律的限制，帶動載板與PCB朝向大尺寸、高層數發展；產業發展已不再是過去單兵作戰的代工思維，必須轉向上下游緊密協同的生態系合作模式。</p>
-            <span class="news-meta">中央社 · Tue, 20 Oct 2026 12:08:04 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/afe/202610200100.aspx" target="_blank" rel="noopener">新台幣午盤重貶1.71角　暫收32.616元</a>
-            <p class="news-desc">（中央社台北20日電）台北外匯市場新台幣兌美元今天中午暫收32.616元，重貶1.71角，成交金額16.71億美元。</p>
-            <span class="news-meta">中央社 · Tue, 20 Oct 2026 12:05:58 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://www.cna.com.tw/news/afe/202610200097.aspx" target="_blank" rel="noopener">台灣赴美設產業園區　東元：德州有據點續推動新項目</a>
-            <p class="news-desc">（中央社記者鍾榮峰台北20日電）台灣在美國包括德州等地設立產業園區進展備受矚目，電機大廠東元總經理高飛鳶今天表示，配合政府進展，東元在德州已有據點，美國德州西屋馬達廠區土地非常大，未來幾年將有新項目推動，目前部分項目進行中。</p>
-            <span class="news-meta">中央社 · Tue, 20 Oct 2026 11:57:51 +0800</span>
         </li></ul>
     <h3 style="font-size:14px;color:var(--muted);margin:16px 0 8px;">國際大事（牽動台股）</h3>
     <ul class="news-list">
@@ -726,6 +849,21 @@
     </div>
     <ul class="news-list">
         <li class="news-item">
+            <a href="https://money.udn.com/money/story/5618/9826598" target="_blank" rel="noopener">基富通10周年基金存量破3,000億元 攜手華銀推出好好安養信託</a>
+            <p class="news-desc">基富通營運屆滿10周年，總客戶數達40萬人，基金存量突破3,000億元。為了進一步完善普惠全齡的理財服務，與華南銀行跨界合作，推出「好好安養信託」，藉由基金投資不中斷、信託專款專用、資產保全等三大機制，滿足安心養老的生活、醫療與照護需求。</p>
+            <span class="news-meta">經濟日報 · Tue, 20 Oct 2026 16:38:00 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://money.udn.com/money/story/5618/9826567" target="_blank" rel="noopener">首發主題式ETF 009834、009835預計11月9日開募 布局全球關鍵金礦資源</a>
+            <p class="news-desc">貝萊德投信20日宣布，「貝萊德iShares安碩世界黃金礦業ETF傘型證券投資信託基金」將於11月9日至11月13日展開募集，旗下包含「貝萊德iShares安碩世界黃金ETF」（009834）及「貝萊德iShares安碩世界礦業ETF」（009835）兩檔全球主題式ETF，協助投資人掌握推動經濟轉型的關鍵力量，布局支撐未來重大產業發展的重要上游資源。</p>
+            <span class="news-meta">經濟日報 · Tue, 20 Oct 2026 16:26:17 +0800</span>
+        </li>
+        <li class="news-item">
+            <a href="https://money.udn.com/money/story/5618/9826542" target="_blank" rel="noopener">AI 需求帶動先進製程擴產 台積電營運成長添動能 00891布局關鍵供應鏈</a>
+            <p class="news-desc">人工智慧（AI）需求持續推升半導體產業成長，台積電（2330）營運表現與先進製程擴產動向，成為市場觀察後市的重要指標。中國信託投信表示，AI商機正從高階運算晶片延伸至晶片設計、先進封裝、設備與材料，台灣具備完整供應鏈優勢，值得投資人以中長期角度關注，並可透過含積量高的半導體主題ETF如中信關鍵半導體（00891）等分批布局，參與產業發展契機。</p>
+            <span class="news-meta">經濟日報 · Tue, 20 Oct 2026 16:15:23 +0800</span>
+        </li>
+        <li class="news-item">
             <a href="https://money.udn.com/money/story/5618/9825593" target="_blank" rel="noopener">主動 ETF 再添百億元新兵 台股回測季線之際經理人看好這50檔</a>
             <p class="news-desc">再有一檔主動式台股ETF報到，募集約120.1億元的主動群益核心50（00415A）於20日掛牌上市，19日最新淨值9.58元，主要成分股包含台積電（2330）、創意（3443）、台燿（6274）等。</p>
             <span class="news-meta">經濟日報 · Tue, 20 Oct 2026 10:57:04 +0800</span>
@@ -779,11 +917,6 @@
             <a href="https://money.udn.com/money/story/5618/9824666" target="_blank" rel="noopener">今日最夯 ETF／中東局勢不穩 00715L 領漲並創歷史新高</a>
             <p class="news-desc">中東局勢不穩，地緣政治風險上揚，國際油價節節上揚，布蘭特原油逼近每桶110美元，相關ETF價量俱揚。期街口布蘭特正2（00715L）在10月19日上漲3.55元，收在80.2元創歷史新高，單日漲4.6%，在所有ETF中高居第一；成交張數為2,610張，比前一個交易日高出49.7%。</p>
             <span class="news-meta">經濟日報 · Mon, 19 Oct 2026 20:30:50 +0800</span>
-        </li>
-        <li class="news-item">
-            <a href="https://money.udn.com/money/story/5618/9824390" target="_blank" rel="noopener">野村搶攻 AI 科技商機 推出亞洲科技、韓國科技兩檔 ETF</a>
-            <p class="news-desc">AI熱潮推升全球科技股連番走高，看好AI資本支出持續向亞洲供應鏈擴散，野村投信趁勢推出主動式ETF「主動野村亞洲科技ETF（00420A）」，布局台日韓等亞洲市場，以及被動式ETF「野村韓國科技30ETF（009833）」，將於11月3日至6日展開募集。</p>
-            <span class="news-meta">經濟日報 · Mon, 19 Oct 2026 17:25:34 +0800</span>
         </li></ul>
   </section>
 
