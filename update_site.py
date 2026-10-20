@@ -144,6 +144,15 @@ def init_db():
             fetched_at TEXT NOT NULL
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS market_metric (
+            metric TEXT NOT NULL,
+            date TEXT NOT NULL,
+            value REAL NOT NULL,
+            fetched_at TEXT NOT NULL,
+            PRIMARY KEY (metric, date)
+        )
+    """)
     conn.commit()
     return conn
 
@@ -476,6 +485,445 @@ def fetch_sector_heatmap(conn):
 
 
 # ============================================================
+# 大盤指標抓取（漲跌家數、成交金額、融資、法人買賣超、本益比）
+# ============================================================
+# 設計原則：
+# 1. 每個指標獨立抓取、獨立存檔，某一項失敗不影響其他項目。
+# 2. 每個排程時段都會嘗試抓一次；已經是最新資料就跳過，抓不到就保留資料庫裡
+#    最後一筆，網頁上每張卡片都會標示自己的資料日期。
+# 3. 所有資料都來自證交所公開資料，不需要任何金鑰。
+# 4. 融資維持率、大盤本益比，證交所沒有直接公布，是依公開資料自行估算。
+
+TWSE_BREADTH_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={date}&type=MS&response=json"
+TWSE_MARGIN_SUMMARY_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={date}&selectType=MS&response=json"
+TWSE_MARGIN_STOCK_URL = "https://openapi.twse.com.tw/v1/exchangeReport/MI_MARGN"
+TWSE_STOCK_DAY_ALL_URL = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
+TWSE_PE_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date={date}&selectType=ALL&response=json"
+TWSE_COMPANY_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
+TWSE_INST_URL = "https://www.twse.com.tw/rwd/zh/fund/BFI82U?type=day&dayDate={date}&response=json"
+
+METRIC_KEEP_DAYS = 120          # 指標歷史保留天數（日曆天）
+INST_MIN_HISTORY = 15           # 三大法人至少要有幾個交易日，才算完成回補（用來算連買連賣）
+TZ_TAIPEI = datetime.timezone(datetime.timedelta(hours=8))
+
+_indicator_fail_streak = 0      # 連續失敗次數；連續3次失敗就判定連線有問題，本次不再繼續抓
+
+
+def init_market_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS market_metric (
+            metric TEXT NOT NULL,
+            date TEXT NOT NULL,
+            value REAL NOT NULL,
+            fetched_at TEXT NOT NULL,
+            PRIMARY KEY (metric, date)
+        )
+    """)
+    conn.commit()
+
+
+def save_metric(conn, metric, date_str, value):
+    conn.execute(
+        "INSERT OR REPLACE INTO market_metric (metric, date, value, fetched_at) VALUES (?, ?, ?, ?)",
+        (metric, date_str, float(value), datetime.datetime.now().isoformat()),
+    )
+
+
+def get_metric_series(conn, metric, limit=10):
+    """回傳 [(date, value), ...]，最新的在最前面"""
+    return conn.execute(
+        "SELECT date, value FROM market_metric WHERE metric = ? ORDER BY date DESC LIMIT ?",
+        (metric, limit),
+    ).fetchall()
+
+
+def get_metric_latest_date(conn, metric):
+    row = conn.execute("SELECT MAX(date) FROM market_metric WHERE metric = ?", (metric,)).fetchone()
+    return row[0] if row and row[0] else None
+
+
+def get_metric_on(conn, metric, date_str):
+    row = conn.execute(
+        "SELECT value FROM market_metric WHERE metric = ? AND date = ?", (metric, date_str)
+    ).fetchone()
+    return row[0] if row else None
+
+
+def count_metric_dates(conn, metric):
+    row = conn.execute("SELECT COUNT(*) FROM market_metric WHERE metric = ?", (metric,)).fetchone()
+    return row[0] if row else 0
+
+
+def trim_metric_history(conn):
+    cutoff = (datetime.date.today() - datetime.timedelta(days=METRIC_KEEP_DAYS)).isoformat()
+    conn.execute("DELETE FROM market_metric WHERE date < ?", (cutoff,))
+
+
+def to_number(raw):
+    """把 '1,234.5' 之類的文字轉成數字；空白、'-'、'--' 回傳 None"""
+    if raw is None:
+        return None
+    s = str(raw).replace(",", "").strip()
+    if s in ("", "-", "--", "X"):
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def roc_slash_to_iso(raw):
+    """'115/10/19' → '2026-10-19'"""
+    try:
+        y, m, d = str(raw).replace(",", "").strip().split("/")
+        return f"{int(y) + 1911}-{int(m):02d}-{int(d):02d}"
+    except (ValueError, AttributeError):
+        return None
+
+
+def roc7_to_iso(raw):
+    """'1151019' → '2026-10-19'"""
+    s = str(raw).strip()
+    try:
+        return f"{int(s[:3]) + 1911}-{int(s[3:5]):02d}-{int(s[5:7]):02d}"
+    except (ValueError, IndexError):
+        return None
+
+
+def candidate_dates(days_back):
+    """從今天（台灣日期）往回數 days_back 個日曆天內的平日，最新的在前面"""
+    today = datetime.datetime.now(TZ_TAIPEI).date()
+    result = []
+    for i in range(days_back + 1):
+        d = today - datetime.timedelta(days=i)
+        if d.weekday() < 5:
+            result.append(d)
+    return result
+
+
+def fetch_json_quick(url):
+    """指標專用的輕量抓取：失敗只重試1次（間隔20秒），不像新聞那樣等15分鐘，
+    避免證交所暫時連不上時整個排程拖太久。連續失敗3次就視為連線有問題。"""
+    global _indicator_fail_streak
+    if _indicator_fail_streak >= 3:
+        return None
+    headers = {"User-Agent": USER_AGENT}
+    for attempt in range(2):
+        try:
+            time.sleep(random.uniform(1, 5))
+            resp = requests.get(url, headers=headers, timeout=25)
+            if resp.status_code == 200:
+                _indicator_fail_streak = 0
+                return resp.json()
+            print(f"[警告] {url} 回應狀態碼 {resp.status_code}")
+        except (requests.RequestException, ValueError) as e:
+            print(f"[警告] 抓取或解析 {url} 失敗: {e}")
+        if attempt == 0:
+            time.sleep(20)
+    _indicator_fail_streak += 1
+    return None
+
+
+def twse_ok(data, d):
+    """證交所 rwd 回應是否為「該日期有資料」。沒資料（假日、尚未公布）時 stat 不是 OK。"""
+    if not isinstance(data, dict) or data.get("stat") != "OK":
+        return False
+    resp_date = str(data.get("date", "")).strip()
+    if resp_date and resp_date != d.strftime("%Y%m%d"):
+        return False
+    return True
+
+
+def parse_count_with_limit(raw):
+    """'163(7)' → (163, 7)；'61' → (61, 0)"""
+    m = re.match(r"\s*([\d,]+)\s*(?:\(\s*([\d,]+)\s*\))?", str(raw))
+    if not m:
+        return None, None
+    n = int(m.group(1).replace(",", ""))
+    lim = int(m.group(2).replace(",", "")) if m.group(2) else 0
+    return n, lim
+
+
+def fetch_breadth(conn, d):
+    """上漲／下跌家數（採「股票」欄，不含權證、ETF 等其他證券）"""
+    data = fetch_json_quick(TWSE_BREADTH_URL.format(date=d.strftime("%Y%m%d")))
+    if not twse_ok(data, d):
+        return False
+    for table in data.get("tables", []):
+        if "漲跌證券數" not in str(table.get("title", "")):
+            continue
+        fields = table.get("fields", [])
+        col = fields.index("股票") if "股票" in fields else 2
+        values = {}
+        for row in table.get("data", []):
+            label = str(row[0])
+            n, lim = parse_count_with_limit(row[col])
+            if n is None:
+                continue
+            if label.startswith("上漲"):
+                values["adv"], values["adv_lim"] = n, lim
+            elif label.startswith("下跌"):
+                values["dec"], values["dec_lim"] = n, lim
+            elif label.startswith("持平"):
+                values["flat"] = n
+        if "adv" in values and "dec" in values and values["adv"] + values["dec"] >= 300:
+            iso = d.isoformat()
+            for k, v in values.items():
+                save_metric(conn, k, iso, v)
+            conn.commit()
+            print(f"[資訊] 漲跌家數 {iso}: 上漲{values['adv']} 下跌{values['dec']}")
+            return True
+        print("[警告] 漲跌家數數值不合理，已捨棄")
+    return False
+
+
+def fetch_volume(conn):
+    """成交金額／成交股數：和加權指數同一支 FMTQIK，抓當月（資料不足時加抓上月）"""
+    today = datetime.datetime.now(TZ_TAIPEI).date()
+    months = [today.strftime("%Y%m")]
+    if count_metric_dates(conn, "vol_amt") < 8:
+        prev_last = today.replace(day=1) - datetime.timedelta(days=1)
+        months.append(prev_last.strftime("%Y%m"))
+    saved = 0
+    for ym in months:
+        data = fetch_json_quick(TAIEX_URL.format(date=f"{ym}01"))
+        if not isinstance(data, dict) or "data" not in data:
+            continue
+        for row in data["data"]:
+            try:
+                iso = roc_slash_to_iso(row[0])
+                shares = to_number(row[1])
+                amount = to_number(row[2])
+                if iso and amount and amount > 1e10:  # 成交金額至少百億，過濾明顯異常
+                    save_metric(conn, "vol_amt", iso, amount)
+                    if shares:
+                        save_metric(conn, "vol_shares", iso, shares)
+                    saved += 1
+            except (IndexError, TypeError):
+                continue
+    conn.commit()
+    print(f"[資訊] 成交金額更新 {saved} 筆")
+
+
+def fetch_margin_summary(conn, d):
+    """大盤融資餘額（張數與金額），含前日餘額以便算增減"""
+    data = fetch_json_quick(TWSE_MARGIN_SUMMARY_URL.format(date=d.strftime("%Y%m%d")))
+    if not twse_ok(data, d):
+        return False
+    tables = data.get("tables", [])
+    if not tables or not tables[0].get("data"):
+        return False
+    table = tables[0]
+    fields = table.get("fields", [])
+    if "今日餘額" not in fields or "前日餘額" not in fields:
+        print("[警告] 融資統計欄位與預期不同，已捨棄")
+        return False
+    i_today, i_prev = fields.index("今日餘額"), fields.index("前日餘額")
+    values = {}
+    for row in table["data"]:
+        label = str(row[0])
+        if label.startswith("融資(交易單位)"):
+            values["margin_lots"], values["margin_lots_prev"] = to_number(row[i_today]), to_number(row[i_prev])
+        elif label.startswith("融資金額"):
+            values["margin_amt"], values["margin_amt_prev"] = to_number(row[i_today]), to_number(row[i_prev])
+    if not all(values.get(k) for k in ("margin_lots", "margin_amt")):
+        return False
+    iso = d.isoformat()
+    for k, v in values.items():
+        if v is not None:
+            save_metric(conn, k, iso, v)
+    conn.commit()
+    print(f"[資訊] 融資餘額 {iso}: {values['margin_amt'] / 1e5:,.0f} 億元")
+    return True
+
+
+def estimate_maintenance(conn, iso):
+    """估算大盤融資維持率 = 融資股票市值 ÷ 融資金額。
+    融資市值 = 各股融資餘額(張)×1000×收盤價 加總。
+    安全檢查：個股融資張數加總必須和大盤統計吻合（誤差1%內），且收盤價日期必須是同一天，
+    才能確定兩份資料是同一天的，否則不更新、保留舊值。"""
+    stock_rows = fetch_json_quick(TWSE_MARGIN_STOCK_URL)
+    price_rows = fetch_json_quick(TWSE_STOCK_DAY_ALL_URL)
+    if not isinstance(stock_rows, list) or not isinstance(price_rows, list) or not stock_rows or not price_rows:
+        return False
+    price_date = roc7_to_iso(price_rows[0].get("Date", ""))
+    if price_date != iso:
+        print(f"[資訊] 融資維持率：收盤價日期 {price_date} 與融資日期 {iso} 不同，等下次再試")
+        return False
+    prices = {str(r.get("Code", "")).strip(): to_number(r.get("ClosingPrice")) for r in price_rows}
+    total_lots, market_value = 0.0, 0.0
+    for r in stock_rows:
+        lots = to_number(r.get("融資今日餘額")) or 0
+        total_lots += lots
+        px = prices.get(str(r.get("股票代號", "")).strip())
+        if lots and px:
+            market_value += lots * 1000 * px
+    summary_lots = get_metric_on(conn, "margin_lots", iso)
+    summary_amt = get_metric_on(conn, "margin_amt", iso)
+    if not summary_lots or not summary_amt:
+        return False
+    if abs(total_lots - summary_lots) / summary_lots > 0.01:
+        print(f"[資訊] 融資維持率：個股加總 {total_lots:,.0f} 張與大盤 {summary_lots:,.0f} 張不吻合，等下次再試")
+        return False
+    ratio = market_value / (summary_amt * 1000) * 100
+    if not (100 <= ratio <= 400):
+        print(f"[警告] 融資維持率估算值 {ratio:.1f}% 超出合理範圍，已捨棄")
+        return False
+    save_metric(conn, "maint", iso, ratio)
+    conn.commit()
+    print(f"[資訊] 融資維持率(估算) {iso}: {ratio:.1f}%")
+    return True
+
+
+def load_issued_shares():
+    """各上市公司已發行普通股數（用來算市值）"""
+    data = fetch_json_quick(TWSE_COMPANY_URL)
+    shares = {}
+    if isinstance(data, list):
+        for rec in data:
+            code = str(rec.get("公司代號", "")).strip()
+            n = to_number(rec.get("已發行普通股數或TDR原股發行股數"))
+            if code and n:
+                shares[code] = n
+    return shares
+
+
+def fetch_market_pe(conn, d):
+    """估算大盤本益比（市值加權）= Σ市值 ÷ Σ(市值÷個股本益比)，
+    只計入有正本益比的公司，虧損公司不納入，所以是估算值。"""
+    data = fetch_json_quick(TWSE_PE_URL.format(date=d.strftime("%Y%m%d")))
+    if not twse_ok(data, d) or not data.get("data"):
+        return False
+    fields = data.get("fields", [])
+    try:
+        i_code, i_close, i_pe = fields.index("證券代號"), fields.index("收盤價"), fields.index("本益比")
+    except ValueError:
+        print("[警告] 本益比欄位與預期不同，已捨棄")
+        return False
+    shares = load_issued_shares()
+    if not shares:
+        return False
+    total_cap, total_earn, used = 0.0, 0.0, 0
+    for row in data["data"]:
+        code = str(row[i_code]).strip()
+        close, pe = to_number(row[i_close]), to_number(row[i_pe])
+        sh = shares.get(code)
+        if not close or not pe or pe <= 0 or not sh:
+            continue
+        cap = close * sh
+        total_cap += cap
+        total_earn += cap / pe
+        used += 1
+    if used < 300 or total_earn <= 0:
+        print(f"[警告] 本益比可用樣本只有 {used} 檔，已捨棄")
+        return False
+    market_pe = total_cap / total_earn
+    if not (5 <= market_pe <= 80):
+        print(f"[警告] 大盤本益比估算值 {market_pe:.1f} 超出合理範圍，已捨棄")
+        return False
+    save_metric(conn, "pe", d.isoformat(), market_pe)
+    conn.commit()
+    print(f"[資訊] 大盤本益比(估算) {d.isoformat()}: {market_pe:.2f}（樣本 {used} 檔）")
+    return True
+
+
+def fetch_institutional(conn, d):
+    """三大法人買賣超（買賣差額，單位：元）。外資 = 外資及陸資＋外資自營商；
+    自營商 = 自行買賣＋避險。"""
+    data = fetch_json_quick(TWSE_INST_URL.format(date=d.strftime("%Y%m%d")))
+    if not twse_ok(data, d) or not data.get("data"):
+        return False
+    foreign, trust, dealer = 0.0, 0.0, 0.0
+    found = set()
+    for row in data["data"]:
+        name = str(row[0])
+        net = to_number(row[3])
+        if net is None:
+            continue
+        if name.startswith("外資"):
+            foreign += net
+            found.add("foreign")
+        elif name.startswith("投信"):
+            trust += net
+            found.add("trust")
+        elif name.startswith("自營商"):
+            dealer += net
+            found.add("dealer")
+    if found != {"foreign", "trust", "dealer"}:
+        print("[警告] 三大法人列名與預期不同，已捨棄")
+        return False
+    iso = d.isoformat()
+    save_metric(conn, "inst_foreign", iso, foreign)
+    save_metric(conn, "inst_trust", iso, trust)
+    save_metric(conn, "inst_dealer", iso, dealer)
+    conn.commit()
+    print(f"[資訊] 三大法人 {iso}: 外資{foreign / 1e8:+,.1f}億 投信{trust / 1e8:+,.1f}億 自營{dealer / 1e8:+,.1f}億")
+    return True
+
+
+def fetch_market_indicators(conn):
+    """每個排程都會呼叫。每項指標：資料庫裡已有最新日期就不重抓；
+    抓不到（尚未公布、假日、連線失敗）就保留舊值，下個時段再試。"""
+    init_market_table(conn)
+
+    # 成交金額（含歷史，一次一個請求）
+    try:
+        fetch_volume(conn)
+    except Exception as e:
+        print(f"[警告] 成交金額抓取例外，已略過: {e}")
+
+    # 漲跌家數、融資餘額、本益比：只要抓到最新一天即可
+    singles = [
+        ("上漲下跌家數", "adv", fetch_breadth),
+        ("融資餘額", "margin_amt", fetch_margin_summary),
+        ("大盤本益比", "pe", fetch_market_pe),
+    ]
+    for label, key, fn in singles:
+        latest = get_metric_latest_date(conn, key)
+        for d in candidate_dates(8):
+            if _indicator_fail_streak >= 3:
+                break
+            if latest and d.isoformat() <= latest:
+                break
+            try:
+                if fn(conn, d):
+                    break
+            except Exception as e:
+                print(f"[警告] {label}抓取例外，已略過: {e}")
+                break
+
+    # 融資維持率：融資餘額有新日期、但維持率還沒跟上時才算
+    try:
+        margin_date = get_metric_latest_date(conn, "margin_amt")
+        maint_date = get_metric_latest_date(conn, "maint")
+        if margin_date and (not maint_date or maint_date < margin_date):
+            estimate_maintenance(conn, margin_date)
+    except Exception as e:
+        print(f"[警告] 融資維持率估算例外，已略過: {e}")
+
+    # 三大法人：需要連續多日資料才能算連買連賣，所以缺的日期都補
+    try:
+        backfill = count_metric_dates(conn, "inst_foreign") < INST_MIN_HISTORY
+        stored = {r[0] for r in conn.execute(
+            "SELECT date FROM market_metric WHERE metric = 'inst_foreign'")}
+        latest = max(stored) if stored else None
+        if backfill:
+            print("[資訊] 三大法人歷史不足，開始一次性回補（用來計算連買連賣）")
+        for d in candidate_dates(35 if backfill else 8):
+            if _indicator_fail_streak >= 3:
+                break
+            iso = d.isoformat()
+            if iso in stored or (not backfill and latest and iso <= latest):
+                continue
+            fetch_institutional(conn, d)
+    except Exception as e:
+        print(f"[警告] 三大法人抓取例外，已略過: {e}")
+
+    trim_metric_history(conn)
+    conn.commit()
+
+
+# ============================================================
 # 產生網頁
 # ============================================================
 
@@ -762,7 +1210,99 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     border-radius: 5px;
     background: linear-gradient(to right, #1E7A4C, #F7F6F2, #B23A2E);
   }}
+  .ind-grid {{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }}
+  .ind-card {{
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 10px;
+    text-align: center;
+  }}
+  .ind-card.ind-wide {{
+    grid-column: 1 / -1;
+  }}
+  .ind-card h4 {{
+    font-size: 12px;
+    margin: 0 0 6px;
+    color: var(--muted);
+    font-weight: 500;
+  }}
+  .ind-main {{
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0;
+  }}
+  .ind-unit {{
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+  }}
+  .ind-slash {{
+    color: var(--muted);
+    font-weight: 400;
+  }}
+  .ind-sub {{
+    font-size: 11px;
+    color: var(--muted);
+    margin: 6px 0 0;
+    line-height: 1.6;
+  }}
+  .ind-est {{
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 4px;
+    font-size: 10px;
+    border: 1px solid var(--muted);
+    border-radius: 3px;
+    color: var(--muted);
+  }}
+  .ind-foot {{
+    font-size: 11px;
+    color: var(--muted);
+    margin: 14px 0 0;
+    line-height: 1.7;
+  }}
+  .inst-list {{
+    max-width: 420px;
+    margin: 4px auto 0;
+  }}
+  .inst-row {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }}
+  .inst-row:last-child {{
+    border-bottom: none;
+  }}
+  .inst-name {{
+    width: 56px;
+    text-align: left;
+  }}
+  .inst-amount {{
+    flex: 1;
+    text-align: right;
+    padding-right: 12px;
+  }}
+  .ind-streak {{
+    min-width: 52px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--muted);
+    border-radius: 10px;
+    padding: 1px 8px;
+    text-align: center;
+  }}
   @media (max-width: 640px) {{
+    .ind-grid {{
+      grid-template-columns: repeat(2, 1fr);
+    }}
     .chart-grid {{
       grid-template-columns: 1fr;
     }}
@@ -834,6 +1374,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </header>
 
   {index_section}
+
+  {indicator_section}
 
   {heatmap_section}
 
@@ -1060,8 +1602,205 @@ def render_sector_heatmap_section(conn):
     </section>"""
 
 
+COLOR_UP = "#B23A2E"     # 紅：漲／買超／正乖離
+COLOR_DOWN = "#1E7A4C"   # 綠：跌／賣超／負乖離
+
+
+def signed_color(v):
+    return COLOR_UP if v >= 0 else COLOR_DOWN
+
+
+def calc_streak(series_desc):
+    """series_desc：[(date, 買賣超), ...]，最新在前。回傳 (是否買超, 連續天數) 或 None"""
+    if not series_desc or series_desc[0][1] == 0:
+        return None
+    is_buy = series_desc[0][1] > 0
+    days = 0
+    for _d, v in series_desc:
+        if v != 0 and (v > 0) == is_buy:
+            days += 1
+        else:
+            break
+    return is_buy, days
+
+
+def streak_html(series_desc):
+    result = calc_streak(series_desc)
+    if not result:
+        return '<span class="ind-streak">－</span>'
+    is_buy, days = result
+    color = COLOR_UP if is_buy else COLOR_DOWN
+    if days >= 2:
+        text = f"連{days}買" if is_buy else f"連{days}賣"
+    else:
+        text = "轉買" if is_buy else "轉賣"
+        if len(series_desc) < 2:
+            text = "買超" if is_buy else "賣超"
+    return f'<span class="ind-streak" style="color:{color};border-color:{color};">{text}</span>'
+
+
+def change_html(delta, pct=None, unit=""):
+    """▲紅／▼綠 的變動文字"""
+    if delta is None:
+        return ""
+    color = signed_color(delta)
+    arrow = "▲" if delta >= 0 else "▼"
+    pct_text = f"（{abs(pct):.1f}%）" if pct is not None else ""
+    return f'<span style="color:{color};">{arrow} {abs(delta):,.1f}{unit}{pct_text}</span>'
+
+
+def ind_card(title, main, sub="", date_str=None, estimate=False, wide=False):
+    tag = '<span class="ind-est">估算</span>' if estimate else ""
+    date_html = f'<p class="value-date">{escape(date_str)}</p>' if date_str else ""
+    sub_html = f'<p class="ind-sub">{sub}</p>' if sub else ""
+    cls = "ind-card ind-wide" if wide else "ind-card"
+    return f"""<div class="{cls}">
+        <h4>{escape(title)}{tag}</h4>
+        <p class="ind-main">{main}</p>
+        {sub_html}
+        {date_html}
+    </div>"""
+
+
+def ind_empty(title, estimate=False):
+    return ind_card(title, '<span class="empty-state">暫無資料</span>', estimate=estimate)
+
+
+def render_breadth_card(conn):
+    adv = get_metric_series(conn, "adv", 1)
+    dec = get_metric_series(conn, "dec", 1)
+    if not adv or not dec or adv[0][0] != dec[0][0]:
+        return ind_empty("上漲／下跌家數")
+    date_str = adv[0][0]
+    adv_lim = get_metric_on(conn, "adv_lim", date_str) or 0
+    dec_lim = get_metric_on(conn, "dec_lim", date_str) or 0
+    flat = get_metric_on(conn, "flat", date_str) or 0
+    main = (f'<span style="color:{COLOR_UP};">{adv[0][1]:,.0f}</span>'
+            f' <span class="ind-slash">/</span> '
+            f'<span style="color:{COLOR_DOWN};">{dec[0][1]:,.0f}</span>')
+    sub = f"漲停 {adv_lim:,.0f}・跌停 {dec_lim:,.0f}・持平 {flat:,.0f}"
+    return ind_card("上漲／下跌家數", main, sub, date_str)
+
+
+def render_volume_card(conn):
+    series = get_metric_series(conn, "vol_amt", 5)
+    if not series:
+        return ind_empty("成交金額")
+    date_str, latest = series[0]
+    main = f"{latest / 1e8:,.0f} <span class=\"ind-unit\">億元</span>"
+    parts = []
+    if len(series) >= 2 and series[1][1]:
+        prev = series[1][1]
+        parts.append("較前日 " + change_html((latest - prev) / 1e8, (latest - prev) / prev * 100, "億"))
+    if len(series) >= 5:
+        avg5 = sum(v for _d, v in series[:5]) / 5
+        parts.append(f"近5日均 {avg5 / 1e8:,.0f} 億")
+    return ind_card("成交金額", main, "<br>".join(parts), date_str)
+
+
+def render_margin_card(conn):
+    series = get_metric_series(conn, "margin_amt", 1)
+    if not series:
+        return ind_empty("融資餘額")
+    date_str, amt = series[0]
+    lots = get_metric_on(conn, "margin_lots", date_str)
+    prev_amt = get_metric_on(conn, "margin_amt_prev", date_str)
+    main = f"{amt / 1e5:,.0f} <span class=\"ind-unit\">億元</span>"
+    parts = []
+    if prev_amt:
+        diff = (amt - prev_amt) / 1e5
+        parts.append("較前日 " + change_html(diff, (amt - prev_amt) / prev_amt * 100, "億"))
+    if lots:
+        parts.append(f"{lots:,.0f} 張")
+    return ind_card("融資餘額", main, "<br>".join(parts), date_str)
+
+
+def render_maint_card(conn):
+    series = get_metric_series(conn, "maint", 2)
+    if not series:
+        return ind_empty("融資維持率", estimate=True)
+    date_str, ratio = series[0]
+    sub = ""
+    if len(series) >= 2:
+        sub = "較前次 " + change_html(ratio - series[1][1], None, "%")
+    return ind_card("融資維持率", f"{ratio:.1f}<span class=\"ind-unit\">%</span>", sub, date_str, estimate=True)
+
+
+def render_pe_card(conn):
+    series = get_metric_series(conn, "pe", 2)
+    if not series:
+        return ind_empty("大盤本益比", estimate=True)
+    date_str, pe = series[0]
+    sub = "市值加權，不含虧損公司"
+    return ind_card("大盤本益比", f"{pe:.1f}<span class=\"ind-unit\"> 倍</span>", sub, date_str, estimate=True)
+
+
+def render_bias_card(conn):
+    """與季線（60日均線）的乖離率，直接用資料庫裡的加權指數歷史計算"""
+    rows = conn.execute(
+        "SELECT date, close_value FROM index_history WHERE index_code = 'TAIEX' ORDER BY date DESC LIMIT 60"
+    ).fetchall()
+    if len(rows) < 60:
+        return ind_empty("與季線乖離")
+    date_str, close = rows[0]
+    ma60 = sum(v for _d, v in rows) / len(rows)
+    bias = (close - ma60) / ma60 * 100
+    label = "正乖離" if bias >= 0 else "負乖離"
+    main = f'<span style="color:{signed_color(bias)};">{bias:+.2f}<span class="ind-unit">%</span></span>'
+    sub = f"{label}・收盤 {close:,.0f} / 季線 {ma60:,.0f}"
+    return ind_card("與季線乖離", main, sub, date_str)
+
+
+def render_institutional_card(conn):
+    items = [("外資", "inst_foreign"), ("投信", "inst_trust"), ("自營商", "inst_dealer")]
+    first = get_metric_series(conn, "inst_foreign", 1)
+    if not first:
+        return ind_empty("三大法人買賣超").replace('class="ind-card"', 'class="ind-card ind-wide"')
+    date_str = first[0][0]
+    rows_html = []
+    for label, metric in items:
+        series = get_metric_series(conn, metric, 30)
+        if not series:
+            continue
+        net = series[0][1]
+        amount = f'<span style="color:{signed_color(net)};font-weight:700;">{net / 1e8:+,.1f} 億</span>'
+        rows_html.append(f"""<div class="inst-row">
+            <span class="inst-name">{label}</span>
+            <span class="inst-amount">{amount}</span>
+            {streak_html(series)}
+        </div>""")
+    note = "買賣超金額；連買／連賣依資料庫累積的交易日計算"
+    return f"""<div class="ind-card ind-wide">
+        <h4>三大法人買賣超</h4>
+        <div class="inst-list">{"".join(rows_html)}</div>
+        <p class="ind-sub">{note}</p>
+        <p class="value-date">{escape(date_str)}</p>
+    </div>"""
+
+
+def render_indicator_section(conn):
+    cards = "".join([
+        render_breadth_card(conn),
+        render_volume_card(conn),
+        render_margin_card(conn),
+        render_maint_card(conn),
+        render_pe_card(conn),
+        render_bias_card(conn),
+        render_institutional_card(conn),
+    ])
+    return f"""
+    <section class="card">
+        <div class="section-head">
+            <h2>大盤指標</h2>
+        </div>
+        <div class="ind-grid">{cards}</div>
+        <p class="ind-foot">資料來源：臺灣證券交易所公開資料。各項指標各自更新，尚未公布時沿用最近一筆並標示資料日期；標示「估算」者為依公開資料自行推算，數字可能與其他網站略有差異。</p>
+    </section>"""
+
+
 def build_html(conn):
     index_section = render_index_section(conn)
+    indicator_section = render_indicator_section(conn)
     heatmap_section = render_sector_heatmap_section(conn)
 
     macro_rows = get_recent_articles(conn, "macro")
@@ -1077,6 +1816,7 @@ def build_html(conn):
     html = HTML_TEMPLATE.format(
         build_time=build_time,
         index_section=index_section,
+        indicator_section=indicator_section,
         heatmap_section=heatmap_section,
         macro_section=macro_section,
         taiwan_stock_list=taiwan_stock_list,
@@ -1118,6 +1858,12 @@ def main():
             print(f"[警告] 產業熱力圖抓取過程發生例外，已略過本次: {e}")
         except Exception as e:
             print(f"[警告] 美股指數抓取過程發生例外，已略過本次: {e}")
+
+    print("步驟 2.5/3：抓取大盤指標（每個時段都嘗試，抓不到就沿用舊值）...")
+    try:
+        fetch_market_indicators(conn)
+    except Exception as e:
+        print(f"[警告] 大盤指標抓取過程發生例外，已略過本次: {e}")
 
     print("步驟 3/3：產生網頁...")
     build_html(conn)
